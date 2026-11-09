@@ -25,27 +25,34 @@ class Game:
                 sys.exit()
                 
             elif event.type == pygame.KEYDOWN:
-                if self.gs.state in ('INTRO_1', 'INTRO_2'):
+                if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                        target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else self.gs.intro_texts[1]
+                        target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else (self.gs.intro_texts[1] if self.gs.state == 'INTRO_2' else self.gs.intro_texts[2])
                         if self.gs.current_char_index < len(target_text):
                             self.gs.displayed_text = target_text
                             self.gs.current_char_index = len(target_text)
                         else:
                             if self.gs.state == 'INTRO_1':
                                 self.gs.state = 'INTRO_2'
-                                self.gs.current_intro_index = 1
+                                self.gs.current_char_index = 0
+                                self.gs.displayed_text = ""
+                            elif self.gs.state == 'INTRO_2':
+                                self.gs.state = 'INTRO_3'
                                 self.gs.current_char_index = 0
                                 self.gs.displayed_text = ""
                             else:
-                                self.gs.state = 'WAKE_UP'
-                                self.gs.displayed_text = "Вы просыпаетесь за своим рабочим столом...\nВам приносят первые извести, из которых вы должны принять первое решение."
-                                self.gs.current_char_index = len(self.gs.displayed_text)
-                            
-                elif self.gs.state == 'WAKE_UP':
+                                self.gs.state = 'PLAYING'
+                                
+                elif self.gs.state == 'RESULT_WAIT':
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                        self.gs.state = 'PLAYING'
-                        
+                        if self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_text_full):
+                            self.gs.apply_pending_effects()
+                            self.gs.state = 'PLAYING'
+                        elif self.gs.result_phase == 'DOTS':
+                            self.gs.result_phase = 'TEXT'
+                            self.gs.current_char_index = 0
+                            self.gs.displayed_text = ""
+                            
             elif event.type == pygame.MOUSEBUTTONDOWN and self.gs.state == 'PLAYING':
                 if event.button == 1:
                     if self.gs.card_rect.collidepoint((event.pos[0] - (self.gs.card_current_x - self.gs.card_rect.x), event.pos[1])):
@@ -57,9 +64,9 @@ class Game:
                     if self.gs.is_dragging:
                         self.gs.is_dragging = False
                         if self.gs.card_current_x < self.gs.card_rect.x - 120:
-                            self.gs.resolve_choice("LEFT")
+                            self.gs.trigger_choice("LEFT")
                         elif self.gs.card_current_x > self.gs.card_rect.x + 120:
-                            self.gs.resolve_choice("RIGHT")
+                            self.gs.trigger_choice("RIGHT")
                         else:
                             self.gs.card_current_x = self.gs.card_rect.x
                             
@@ -68,17 +75,35 @@ class Game:
                     self.gs.card_current_x = event.pos[0] - self.gs.card_drag_offset_x
 
     def update(self):
-        if self.gs.state in ('INTRO_1', 'INTRO_2'):
+        if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
             if self.gs.intro_alpha > 0:
                 self.gs.intro_alpha = max(0, self.gs.intro_alpha - 2)
                 
-            target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else self.gs.intro_texts[1]
+            target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else (self.gs.intro_texts[1] if self.gs.state == 'INTRO_2' else self.gs.intro_texts[2])
             if self.gs.current_char_index < len(target_text):
                 self.gs.text_timer += 1
                 if self.gs.text_timer >= self.gs.text_speed:
                     self.gs.current_char_index += 1
                     self.gs.displayed_text = target_text[:self.gs.current_char_index]
                     self.gs.text_timer = 0
+                    
+        elif self.gs.state == 'RESULT_WAIT':
+            if self.gs.result_phase == 'DOTS':
+                self.gs.result_timer += 1
+                if self.gs.result_timer > 30:
+                    self.gs.displayed_text += "."
+                    self.gs.result_timer = 0
+                    if len(self.gs.displayed_text) >= 3:
+                        self.gs.result_phase = 'TEXT'
+                        self.gs.current_char_index = 0
+                        self.gs.displayed_text = ""
+            elif self.gs.result_phase == 'TEXT':
+                if self.gs.current_char_index < len(self.gs.result_text_full):
+                    self.gs.text_timer += 1
+                    if self.gs.text_timer >= self.gs.text_speed:
+                        self.gs.current_char_index += 1
+                        self.gs.displayed_text = self.gs.result_text_full[:self.gs.current_char_index]
+                        self.gs.text_timer = 0
 
     def render(self):
         self.screen.fill(COLOR_BG)
@@ -89,7 +114,7 @@ class Game:
             for i in range(0, SCREEN_HEIGHT, 40):
                 pygame.draw.line(self.screen, (12, 18, 14), (0, i), (SCREEN_WIDTH, i), 1)
 
-        if self.gs.state in ('INTRO_1', 'INTRO_2', 'WAKE_UP'):
+        if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3', 'RESULT_WAIT'):
             dialog_width = SCREEN_WIDTH - 40
             dialog_height = 140
             dialog_x = 20
@@ -112,7 +137,7 @@ class Game:
             prompt_surf = FONT_SMALL.render("[ Нажмите SPACE, чтобы продолжить ]", True, COLOR_ACCENT)
             self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
             
-        elif self.gs.state == 'PLAYING':
+        if self.gs.state == 'PLAYING':
             render_top_hud(self.screen, self.gs.stats)
             render_side_economy(self.screen, self.gs.resources)
             render_anomaly_radial(self.screen, self.gs.reality_stability)

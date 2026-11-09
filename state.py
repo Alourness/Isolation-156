@@ -36,6 +36,9 @@ class GameState:
         self.result_full_string = ""
         self.result_chunks = []
         
+        self.game_over_alpha = 0
+        self.is_defeat = False
+        
         self.stats = {
             "Вера людей": {"val": 50, "color": (210, 175, 70)},
             "Сила армии": {"val": 50, "color": (195, 65, 65)},
@@ -92,7 +95,6 @@ class GameState:
         self.current_card_index = 0
         self.card_data = self.cards_pool[self.current_card_index]
         
-        # Увеличили ширину карточки с 460 до 520, чтобы заголовки помещались целиком
         self.card_rect = pygame.Rect(SCREEN_WIDTH // 2 - 260, SCREEN_HEIGHT // 2 - 160, 520, 340)
         self.card_drag_offset_x = 0
         self.is_dragging = False
@@ -121,6 +123,8 @@ class GameState:
             self.displayed_text = ""
             self.pending_effects = card["left_effects"]
             self.result_text_full = card["left_result"]
+            if self.revolution_active:
+                self.is_defeat = True
         else:
             self.displayed_text = ""
             self.pending_effects = card["right_effects"]
@@ -174,6 +178,10 @@ class GameState:
             self.resources["Материя"] = max(0, self.resources["Материя"] + effects["matter"])
         if "energy" in effects:
             self.resources["Энергия"] = max(0, self.resources["Энергия"] + effects["energy"])
+            
+        if self.is_defeat:
+            self.state = 'GAME_OVER'
+            return
             
         if self.revolution_active:
             self.revolution_active = False

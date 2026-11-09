@@ -47,7 +47,8 @@ class Game:
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
                         if self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_full_string):
                             self.gs.apply_pending_effects()
-                            self.gs.state = 'PLAYING'
+                            if self.gs.state != 'GAME_OVER':
+                                self.gs.state = 'PLAYING'
                         elif self.gs.result_phase == 'DOTS':
                             self.gs.result_phase = 'TEXT'
                             self.gs.current_char_index = 0
@@ -120,6 +121,10 @@ class Game:
                                 chars_left = 0
                         self.gs.current_rendered_chunks = current_rendered_chunks
                         self.gs.text_timer = 0
+                        
+        elif self.gs.state == 'GAME_OVER':
+            if self.gs.game_over_alpha < 255:
+                self.gs.game_over_alpha = min(255, self.gs.game_over_alpha + 2)
 
     def render(self):
         self.screen.fill(COLOR_BG)
@@ -129,6 +134,12 @@ class Game:
         else:
             for i in range(0, SCREEN_HEIGHT, 40):
                 pygame.draw.line(self.screen, (12, 18, 14), (0, i), (SCREEN_WIDTH, i), 1)
+
+        # Если не играем и не в геймовере — рисуем интерфейс игры под низом
+        if self.gs.state != 'GAME_OVER':
+            render_top_hud(self.screen, self.gs.stats)
+            render_side_economy(self.screen, self.gs.resources)
+            render_anomaly_radial(self.screen, self.gs.reality_stability)
 
         if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3', 'RESULT_WAIT'):
             dialog_width = SCREEN_WIDTH - 40
@@ -176,14 +187,9 @@ class Game:
             self.screen.blit(dialog_surface, (dialog_x, dialog_y))
             
             prompt_surf = FONT_SMALL.render("[ Нажмите SPACE, чтобы продолжить ]", True, COLOR_ACCENT)
-            self.screen_blit_center_x = SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2
-            self.screen.blit(prompt_surf, (self.screen_blit_center_x, SCREEN_HEIGHT - 45))
+            self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
             
-        if self.gs.state == 'PLAYING':
-            render_top_hud(self.screen, self.gs.stats)
-            render_side_economy(self.screen, self.gs.resources)
-            render_anomaly_radial(self.screen, self.gs.reality_stability)
-            
+        elif self.gs.state == 'PLAYING':
             card_draw_rect = pygame.Rect(self.gs.card_current_x, self.gs.card_rect.y, self.gs.card_rect.width, self.gs.card_rect.height)
             
             pygame.draw.rect(self.screen, COLOR_CARD_BG, card_draw_rect, border_radius=12)
@@ -193,7 +199,6 @@ class Game:
             
             active_card = self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data
             
-            # Рендерим заголовок карточки с автоматическим переносом, если он длинный
             title_words = active_card["title"].split(' ')
             title_line = ""
             title_y = card_draw_rect.y + 25
@@ -211,7 +216,6 @@ class Game:
             t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
             self.screen.blit(t_surf, (card_draw_rect.x + 30, title_y))
             
-            # Описание карточки
             words = active_card["desc"].split(' ')
             line = ""
             desc_y = title_y + 45
@@ -244,7 +248,20 @@ class Game:
                 bg_surf.blit(preview_surf, (12, 7))
                 self.screen.blit(bg_surf, (SCREEN_WIDTH - bg_surf.get_width() - 60, SCREEN_HEIGHT - 100))
 
-        if self.gs.intro_alpha > 0:
+        # Анимация затухания и появления надписи ПОРАЖЕНИЕ
+        if self.gs.state == 'GAME_OVER':
+            fade_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            fade_overlay.fill(COLOR_BLACK)
+            fade_overlay.set_alpha(self.gs.game_over_alpha)
+            self.screen.blit(fade_overlay, (0, 0))
+            
+            if self.gs.game_over_alpha > 50:
+                defeat_surf = FONT_TITLE.render("ПОРАЖЕНИЕ", True, COLOR_DANGER)
+                defeat_surf.set_alpha(min(255, self.gs.game_over_alpha))
+                defeat_rect = defeat_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+                self.screen.blit(defeat_surf, defeat_rect)
+
+        if self.gs.intro_alpha > 0 and self.gs.state != 'GAME_OVER':
             fade_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
             fade_surf.fill(COLOR_BLACK)
             fade_surf.set_alpha(self.gs.intro_alpha)

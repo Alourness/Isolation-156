@@ -9,11 +9,13 @@ SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
 FPS = 60
 
-COLOR_BG = (10, 14, 12)
-COLOR_PANEL = (20, 28, 22)
-COLOR_TEXT = (180, 210, 190)
-COLOR_ACCENT = (50, 180, 90)
-COLOR_DANGER = (180, 50, 40)
+COLOR_BG = (10, 13, 11)
+COLOR_CARD_BG = (22, 26, 23)
+COLOR_TEXT = (195, 215, 200)
+COLOR_ACCENT = (70, 190, 110)
+COLOR_DANGER = (210, 65, 55)
+COLOR_WARNING = (215, 175, 60)
+COLOR_ANOMALY = (70, 200, 215)
 COLOR_BLACK = (0, 0, 0)
 
 class Game:
@@ -22,9 +24,10 @@ class Game:
         pygame.display.set_caption("Isolation-156")
         self.clock = pygame.time.Clock()
         
-        self.font_main = pygame.font.SysFont("Courier New", 20, bold=True)
-        self.font_title = pygame.font.SysFont("Courier New", 28, bold=True)
-        self.font_small = pygame.font.SysFont("Courier New", 14)
+        self.font_main = pygame.font.SysFont("Courier New", 18, bold=True)
+        self.font_title = pygame.font.SysFont("Courier New", 26, bold=True)
+        self.font_small = pygame.font.SysFont("Courier New", 14, bold=True)
+        self.font_hud = pygame.font.SysFont("Courier New", 13, bold=True)
         
         self.background_art = self.load_background_art()
         
@@ -42,26 +45,28 @@ class Game:
         self.text_speed = 3
         
         self.stats = {
-            "Вера людей": 50,
-            "Сила армии": 50,
-            "Жизнепригодность": 50,
-            "Стабильность реальности": 50,
-            "Политическая стабильность": 50,
-            "Порядок": 50
+            "Вера людей": {"val": 50, "color": (230, 200, 100), "icon": "✦"},
+            "Сила армии": {"val": 50, "color": (210, 80, 80), "icon": "⚔"},
+            "Жизнепригодность": {"val": 50, "color": (80, 190, 130), "icon": "🫁"},
+            "Политическая стабильность": {"val": 50, "color": (150, 110, 210), "icon": "⚖"},
+            "Порядок": {"val": 50, "color": (220, 140, 60), "icon": "☩"}
         }
+        
+        self.reality_stability = 65
+        
         self.resources = {
-            "Казна (Материя)": 100,
+            "Материя": 100,
             "Энергия": 80
         }
         
         self.card_data = {
             "title": "Угроза воздушного фильтра в Секторе 4",
             "desc": "Начальник нижнего технического цеха докладывает о критическом износе турбин. Без ремонта уровень удушья возрастет.",
-            "left_preview": "Отказать в ресурсах (Упадет Вера, сэкономим Материю)",
-            "right_preview": "Выделить детали (Потратим Материю, поднимем Жизнепригодность)"
+            "left_preview": "ОТКАЗАТЬ: Сохранить Материю, уронить Веру людей",
+            "right_preview": "ВЫДЕЛИТЬ ДЕТАЛИ: Потратить Материю, поднять Жизнепригодность"
         }
         
-        self.card_rect = pygame.Rect(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 150, 400, 300)
+        self.card_rect = pygame.Rect(SCREEN_WIDTH // 2 - 210, SCREEN_HEIGHT // 2 - 140, 420, 320)
         self.card_drag_offset_x = 0
         self.is_dragging = False
         self.card_current_x = self.card_rect.x
@@ -140,11 +145,11 @@ class Game:
 
     def resolve_choice(self, direction):
         if direction == "LEFT":
-            self.stats["Вера людей"] -= 10
-            self.resources["Казна (Материя)"] += 20
+            self.stats["Вера людей"]["val"] = max(0, self.stats["Вера людей"]["val"] - 15)
+            self.resources["Материя"] += 25
         else:
-            self.stats["Жизнепригодность"] += 10
-            self.resources["Казна (Материя)"] -= 30
+            self.stats["Жизнепригодность"]["val"] = min(100, self.stats["Жизнепригодность"]["val"] + 15)
+            self.resources["Материя"] = max(0, self.resources["Материя"] - 30)
         self.card_current_x = self.card_rect.x
 
     def render(self):
@@ -157,67 +162,78 @@ class Game:
                 pygame.draw.line(self.screen, (15, 20, 16), (0, i), (SCREEN_WIDTH, i), 1)
 
         if self.state in ('INTRO', 'WAKE_UP'):
-            dialog_width = SCREEN_WIDTH - 120
-            dialog_height = 180
-            dialog_x = 60
-            dialog_y = 40  # Окно поднято выше (было 80)
+            dialog_width = SCREEN_WIDTH - 40
+            dialog_height = 130
+            dialog_x = 20
+            dialog_y = 10
             
             dialog_surface = pygame.Surface((dialog_width, dialog_height), pygame.SRCALPHA)
-            dialog_surface.fill((10, 12, 10, 235))
+            dialog_surface.fill((10, 12, 10, 245))
             
-            # Рисуем рамку с закругленными углами (border_radius=12)
-            pygame.draw.rect(dialog_surface, COLOR_ACCENT, dialog_surface.get_rect(), 2, border_radius=12)
+            pygame.draw.rect(dialog_surface, COLOR_ACCENT, dialog_surface.get_rect(), 2, border_radius=8)
             
             lines = self.displayed_text.split('\n')
-            y_offset = 25
+            y_offset = 18
             for line in lines:
                 text_surf = self.font_main.render(line, True, COLOR_TEXT)
                 dialog_surface.blit(text_surf, (25, y_offset))
-                y_offset += 32
+                y_offset += 30
                 
             self.screen.blit(dialog_surface, (dialog_x, dialog_y))
             
-            prompt_surf = self.font_small.render("[ Нажмите SPACE, чтобы продолжить ]", True, (120, 150, 130))
-            self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 60))
+            prompt_surf = self.font_small.render("[ Нажмите SPACE, чтобы продолжить ]", True, COLOR_ACCENT)
+            self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
             
         elif self.state == 'PLAYING':
             self.render_top_hud()
+            self.render_side_economy()
+            self.render_anomaly_indicator()
             
             card_draw_rect = pygame.Rect(self.card_current_x, self.card_rect.y, self.card_rect.width, self.card_rect.height)
             
             shadow_rect = card_draw_rect.copy()
-            shadow_rect.x += 6
-            shadow_rect.y += 6
-            pygame.draw.rect(self.screen, COLOR_BLACK, shadow_rect)
+            shadow_rect.x += 8
+            shadow_rect.y += 8
+            pygame.draw.rect(self.screen, COLOR_BLACK, shadow_rect, border_radius=6)
             
-            pygame.draw.rect(self.screen, COLOR_PANEL, card_draw_rect)
-            pygame.draw.rect(self.screen, COLOR_ACCENT, card_draw_rect, 2)
+            pygame.draw.rect(self.screen, COLOR_CARD_BG, card_draw_rect, border_radius=6)
+            pygame.draw.rect(self.screen, (75, 95, 80), card_draw_rect, 2, border_radius=6)
+            pygame.draw.rect(self.screen, COLOR_ACCENT, card_draw_rect.inflate(-8, -8), 1, border_radius=4)
             
             title_surf = self.font_title.render("КРИЗИС СЕКТОРА", True, COLOR_ACCENT)
-            self.screen.blit(title_surf, (card_draw_rect.x + 20, card_draw_rect.y + 20))
+            self.screen.blit(title_surf, (card_draw_rect.x + 25, card_draw_rect.y + 25))
             
-            desc_y = card_draw_rect.y + 70
+            desc_y = card_draw_rect.y + 80
             words = self.card_data["desc"].split(' ')
             line = ""
             for word in words:
                 test_line = line + word + " "
-                if self.font_main.size(test_line)[0] > card_draw_rect.width - 40:
+                if self.font_main.size(test_line)[0] > card_draw_rect.width - 50:
                     desc_surf = self.font_main.render(line, True, COLOR_TEXT)
-                    self.screen.blit(desc_surf, (card_draw_rect.x + 20, desc_y))
+                    self.screen.blit(desc_surf, (card_draw_rect.x + 25, desc_y))
                     desc_y += 24
                     line = word + " "
                 else:
                     line = test_line
             desc_surf = self.font_main.render(line, True, COLOR_TEXT)
-            self.screen.blit(desc_surf, (card_draw_rect.x + 20, desc_y))
+            self.screen.blit(desc_surf, (card_draw_rect.x + 25, desc_y))
             
             offset_delta = self.card_current_x - self.card_rect.x
-            if offset_delta < -30:
-                prev_surf = self.font_small.render(self.card_data["left_preview"], True, COLOR_DANGER)
-                self.screen.blit(prev_surf, (60, SCREEN_HEIGHT - 90))
-            elif offset_delta > 30:
-                prev_surf = self.font_small.render(self.card_data["right_preview"], True, COLOR_ACCENT)
-                self.screen.blit(prev_surf, (SCREEN_WIDTH - prev_surf.get_width() - 60, SCREEN_HEIGHT - 90))
+            if offset_delta < -35:
+                preview_surf = self.font_main.render(self.card_data["left_preview"], True, COLOR_DANGER)
+                bg_surf = pygame.Surface((preview_surf.get_width() + 24, preview_surf.get_height() + 14), pygame.SRCALPHA)
+                bg_surf.fill((25, 12, 12, 240))
+                pygame.draw.rect(bg_surf, COLOR_DANGER, bg_surf.get_rect(), 2, border_radius=4)
+                bg_surf.blit(preview_surf, (12, 7))
+                self.screen.blit(bg_surf, (60, SCREEN_HEIGHT - 100))
+                
+            elif offset_delta > 35:
+                preview_surf = self.font_main.render(self.card_data["right_preview"], True, COLOR_ACCENT)
+                bg_surf = pygame.Surface((preview_surf.get_width() + 24, preview_surf.get_height() + 14), pygame.SRCALPHA)
+                bg_surf.fill((12, 25, 16, 240))
+                pygame.draw.rect(bg_surf, COLOR_ACCENT, bg_surf.get_rect(), 2, border_radius=4)
+                bg_surf.blit(preview_surf, (12, 7))
+                self.screen.blit(bg_surf, (SCREEN_WIDTH - bg_surf.get_width() - 60, SCREEN_HEIGHT - 100))
 
         if self.intro_alpha > 0:
             fade_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -228,15 +244,91 @@ class Game:
         pygame.display.flip()
 
     def render_top_hud(self):
-        hud_rect = pygame.Rect(20, 20, SCREEN_WIDTH - 40, 60)
-        pygame.draw.rect(self.screen, COLOR_PANEL, hud_rect)
-        pygame.draw.rect(self.screen, COLOR_ACCENT, hud_rect, 1)
+        panel_width = 860
+        panel_height = 55
+        panel_x = 20
+        panel_y = 15
         
-        x_offset = 35
-        for stat_name, val in self.stats.items():
-            stat_text = self.font_small.render(f"{stat_name[:4]}: {val}%", True, COLOR_TEXT)
-            self.screen.blit(stat_text, (x_offset, hud_rect.y + 20))
-            x_offset += 190
+        hud_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        hud_surf.fill((15, 22, 18, 240))
+        pygame.draw.rect(hud_surf, COLOR_ACCENT, hud_surf.get_rect(), 2, border_radius=8)
+        
+        x_offset = 15
+        bar_width = 100
+        bar_height = 10
+        
+        for stat_name, data in self.stats.items():
+            val = data["val"]
+            color = data["color"]
+            icon = data["icon"]
+            
+            icon_surf = self.font_hud.render(f"{icon} {stat_name[:6]}", True, color)
+            hud_surf.blit(icon_surf, (x_offset, 10))
+            
+            bar_x = x_offset
+            bar_y = 30
+            pygame.draw.rect(hud_surf, (35, 45, 38), (bar_x, bar_y, bar_width, bar_height), border_radius=3)
+            
+            fill_w = int((val / 100.0) * bar_width)
+            fill_color = color if val > 30 else COLOR_DANGER
+            if fill_w > 0:
+                pygame.draw.rect(hud_surf, fill_color, (bar_x, bar_y, fill_w, bar_height), border_radius=3)
+            
+            val_surf = self.font_hud.render(f"{val}%", True, COLOR_TEXT)
+            hud_surf.blit(val_surf, (bar_x + bar_width + 6, bar_y - 2))
+            
+            x_offset += 165
+            
+        self.screen.blit(hud_surf, (panel_x, panel_y))
+
+    def render_side_economy(self):
+        panel_width = 200
+        panel_height = 110
+        panel_x = SCREEN_WIDTH - 220
+        panel_y = 15
+        
+        econ_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        econ_surf.fill((18, 24, 20, 240))
+        pygame.draw.rect(econ_surf, COLOR_WARNING, econ_surf.get_rect(), 2, border_radius=8)
+        
+        title_surf = self.font_small.render("РЕСУРСЫ СЕКТОРА", True, COLOR_WARNING)
+        econ_surf.blit(title_surf, (15, 12))
+        
+        y_pos = 42
+        for res_name, res_val in self.resources.items():
+            res_surf = self.font_hud.render(f"• {res_name}: {res_val}", True, COLOR_TEXT)
+            econ_surf.blit(res_surf, (15, y_pos))
+            y_pos += 26
+            
+        self.screen.blit(econ_surf, (panel_x, panel_y))
+
+    def render_anomaly_indicator(self):
+        panel_width = 200
+        panel_height = 75
+        panel_x = SCREEN_WIDTH - 220
+        panel_y = SCREEN_HEIGHT - 95
+        
+        anom_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        anom_surf.fill((15, 25, 28, 240))
+        pygame.draw.rect(anom_surf, COLOR_ANOMALY, anom_surf.get_rect(), 2, border_radius=8)
+        
+        title_surf = self.font_hud.render("СТАБИЛЬНОСТЬ РЕАЛЬНОСТИ", True, COLOR_ANOMALY)
+        anom_surf.blit(title_surf, (12, 10))
+        
+        bar_x = 12
+        bar_y = 36
+        bar_width = 176
+        bar_height = 12
+        pygame.draw.rect(anom_surf, (30, 45, 48), (bar_x, bar_y, bar_width, bar_height), border_radius=3)
+        
+        fill_w = int((self.reality_stability / 100.0) * bar_width)
+        if fill_w > 0:
+            pygame.draw.rect(anom_surf, COLOR_ANOMALY, (bar_x, bar_y, fill_w, bar_height), border_radius=3)
+            
+        val_surf = self.font_hud.render(f"{self.reality_stability}%", True, COLOR_TEXT)
+        anom_surf.blit(val_surf, (bar_x + bar_width - 35, bar_y - 2))
+        
+        self.screen.blit(anom_surf, (panel_x, panel_y))
 
 if __name__ == "__main__":
     game = Game()

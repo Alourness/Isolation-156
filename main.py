@@ -176,7 +176,8 @@ class Game:
             self.screen.blit(dialog_surface, (dialog_x, dialog_y))
             
             prompt_surf = FONT_SMALL.render("[ Нажмите SPACE, чтобы продолжить ]", True, COLOR_ACCENT)
-            self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
+            self.screen_blit_center_x = SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2
+            self.screen.blit(prompt_surf, (self.screen_blit_center_x, SCREEN_HEIGHT - 45))
             
         if self.gs.state == 'PLAYING':
             render_top_hud(self.screen, self.gs.stats)
@@ -192,15 +193,31 @@ class Game:
             
             active_card = self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data
             
-            title_surf = FONT_TITLE.render(active_card["title"], True, (225, 235, 228))
-            self.screen.blit(title_surf, (card_draw_rect.x + 30, card_draw_rect.y + 30))
+            # Рендерим заголовок карточки с автоматическим переносом, если он длинный
+            title_words = active_card["title"].split(' ')
+            title_line = ""
+            title_y = card_draw_rect.y + 25
+            max_title_width = card_draw_rect.width - 60
             
+            for word in title_words:
+                test_title_line = title_line + word + " "
+                if FONT_TITLE.size(test_title_line)[0] > max_title_width:
+                    t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
+                    self.screen.blit(t_surf, (card_draw_rect.x + 30, title_y))
+                    title_y += 30
+                    title_line = word + " "
+                else:
+                    title_line = test_title_line
+            t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
+            self.screen.blit(t_surf, (card_draw_rect.x + 30, title_y))
+            
+            # Описание карточки
             words = active_card["desc"].split(' ')
             line = ""
-            desc_y = card_draw_rect.y + 90
+            desc_y = title_y + 45
             for word in words:
                 test_line = line + word + " "
-                if FONT_MAIN.size(test_line)[0] > card_draw_rect.width - 60:
+                if FONT_MAIN.size(test_line)[0] > max_title_width:
                     desc_surf = FONT_MAIN.render(line, True, (190, 210, 195))
                     self.screen.blit(desc_surf, (card_draw_rect.x + 30, desc_y))
                     desc_y += 24

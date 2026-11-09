@@ -40,7 +40,7 @@ class GameState:
             "Вера людей": {"val": 50, "color": (210, 175, 70)},
             "Сила армии": {"val": 50, "color": (195, 65, 65)},
             "Жизнепригодность": {"val": 50, "color": (50, 180, 110)},
-            "Политическая\nстабильность": {"val": 50, "color": (130, 95, 195)},
+            "Полит. стab.": {"val": 50, "color": (130, 95, 195)},
             "Порядок": {"val": 50, "color": (210, 125, 50)}
         }
         
@@ -92,7 +92,8 @@ class GameState:
         self.current_card_index = 0
         self.card_data = self.cards_pool[self.current_card_index]
         
-        self.card_rect = pygame.Rect(SCREEN_WIDTH // 2 - 230, SCREEN_HEIGHT // 2 - 160, 460, 340)
+        # Увеличили ширину карточки с 460 до 520, чтобы заголовки помещались целиком
+        self.card_rect = pygame.Rect(SCREEN_WIDTH // 2 - 260, SCREEN_HEIGHT // 2 - 160, 520, 340)
         self.card_drag_offset_x = 0
         self.is_dragging = False
         self.card_current_x = self.card_rect.x

@@ -50,11 +50,11 @@ class GameState:
         self.save_slots = [None] * 6
         self.auto_save = None
         
-        # Добавили влияние на reality (стабильность реальности) в новые и старые карточки
+        # Стабильность реальности меняется только там, где это логически оправданно (аномалии)
         self.card_effects = [
             {
-                "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0, "reality": 1},
-                "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0, "reality": -1},
+                "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0},
+                "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0},
                 "critical": False
             },
             {
@@ -63,18 +63,18 @@ class GameState:
                 "critical": False
             },
             {
-                "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0, "reality": -2},
-                "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3, "reality": 1},
+                "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0},
+                "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3},
                 "critical": False
             },
             {
-                "left_effects": {"faith": -5, "order": 5, "matter": 10, "reality": -1},
-                "right_effects": {"faith": 8, "energy": -15, "order": 0, "reality": 2},
+                "left_effects": {"faith": -5, "order": 5, "matter": 10},
+                "right_effects": {"faith": 8, "energy": -15, "order": 0},
                 "critical": False
             },
             {
-                "left_effects": {"faith": 0, "hab": -6, "order": -8, "reality": -2},
-                "right_effects": {"energy": -25, "hab": 2, "order": 3, "reality": 1},
+                "left_effects": {"faith": 0, "hab": -6, "order": -8},
+                "right_effects": {"energy": -25, "hab": 2, "order": 3},
                 "critical": False
             }
         ]
@@ -218,14 +218,13 @@ class GameState:
             if self.revolution_active and self.revolution_timer <= 0:
                 self.is_defeat = True
 
-        # Проверка: если стат уже 0, а эффект отрицательный (понижение), то оно отменяется
         filtered_effects = {}
         for key, val in raw_effects.items():
             if val < 0:
                 if key in self.stats and self.stats[key]["val"] == 0:
-                    continue  # Пропускаем понижение, если стат уже 0
+                    continue
                 if key in ["matter", "energy"] and self.resources[key] == 0:
-                    continue  # Пропускаем трату ресурсов, если их уже 0
+                    continue
                 if key == "reality" and self.reality_stability == 0:
                     continue
             filtered_effects[key] = val
@@ -249,9 +248,8 @@ class GameState:
                 col = COLOR_ACCENT if is_pos else COLOR_DANGER
                 self.result_chunks.append((text_str + ("   " if idx < len(delta_parts) - 1 else ""), col))
         else:
-            # Если после фильтрации не осталось ни одного изменения
             self.result_chunks.append(("\n", COLOR_TEXT))
-            nothing_text = "Ничего не произошло" if self.language == "ru" else "Nothing happened"
+            nothing_text = get_text(self.language, "nothing_happened")
             self.result_chunks.append((nothing_text, (150, 150, 150)))
 
         self.result_full_string = "".join([chunk[0] for chunk in self.result_chunks])

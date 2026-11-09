@@ -2,7 +2,13 @@ import sys
 import pygame
 from config import *
 from state import GameState
-from ui import render_top_hud, render_side_economy, render_anomaly_radial, render_gradient_background
+from ui import (
+    render_top_hud,
+    render_side_economy,
+    render_anomaly_radial,
+    render_gradient_background,
+    render_wrapped_text,
+)
 from localization import LANGUAGES, get_text, load_language, save_language
 
 class Game:
@@ -16,10 +22,10 @@ class Game:
     def run(self):
         while True:
             self.tick_counter += 1
+            delta_ms = self.clock.tick(FPS)
             self.handle_events()
-            self.update()
+            self.update(delta_ms)
             self.render()
-            self.clock.tick(FPS)
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -56,7 +62,7 @@ class Game:
                                 self.gs.current_card_index = data["card_idx"]
                                 self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
                                 self.gs.turns_counter = data.get("turns", 1)
-                                self.gs.state = 'PLAYING'
+                                self.gs.start_card_appearance()
                             else:
                                 self.gs.save_slots[i] = {
                                     "stats": {k: v["val"] for k, v in self.gs.stats.items()},
@@ -75,9 +81,11 @@ class Game:
                             self.gs.current_card_index = data["card_idx"]
                             self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
                             self.gs.turns_counter = data.get("turns", 1)
-                            self.gs.state = 'PLAYING'
+                            self.gs.start_card_appearance()
                 elif self.gs.state == 'PLAYING':
-                    if self.gs.card_rect.collidepoint((event.pos[0] - (self.gs.card_current_x - self.gs.card_rect.x), event.pos[1])):
+                    if not self.gs.card_animation_active and self.gs.card_rect.collidepoint(
+                        (event.pos[0] - (self.gs.card_current_x - self.gs.card_rect.x), event.pos[1])
+                    ):
                         self.gs.is_dragging = True
                         self.gs.card_drag_offset_x = event.pos[0] - self.gs.card_current_x
 
@@ -113,7 +121,7 @@ class Game:
                                 self.gs.displayed_text = ""
                                 self.gs.text_fast = False
                             else:
-                                self.gs.state = 'PLAYING'
+                                self.gs.start_card_appearance()
                                 
                 elif self.gs.state == 'RESULT_WAIT':
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
@@ -121,22 +129,37 @@ class Game:
                             self.gs.text_fast = True
                         elif self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_full_string):
                             self.gs.apply_pending_effects()
-                            if self.gs.state != 'GAME_OVER':
-                                self.gs.state = 'PLAYING'
                         elif self.gs.result_phase == 'DOTS':
                             self.gs.result_phase = 'TEXT'
                             self.gs.current_char_index = 0
                             self.gs.displayed_text = ""
                             self.gs.text_fast = False
+                elif self.gs.state == 'PLAYING' and self.gs.card_animation_active:
+                    if event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                        self.gs.text_fast = True
 
-    def update(self):
+    def update(self, delta_ms=1000 / FPS):
         if self.gs.state == 'MENU':
             if self.gs.menu_alpha > 0:
                 self.gs.menu_alpha = max(0, self.gs.menu_alpha - 5)
 
-        if self.gs.state == 'PLAYING':
-            if self.gs.card_fade_alpha < 255:
-                self.gs.card_fade_alpha = min(255, self.gs.card_fade_alpha + 15)
+        if self.gs.game_over_phase == 'FADE_IN':
+            self.gs.game_over_alpha = min(
+                255, self.gs.game_over_alpha + 255 * delta_ms / 1200
+            )
+            if self.gs.game_over_alpha >= 255:
+                self.gs.game_over_phase = 'HOLD'
+                self.gs.game_over_timer = 0
+        elif self.gs.game_over_phase == 'HOLD':
+            self.gs.game_over_timer += delta_ms
+            if self.gs.game_over_timer >= 3000:
+                self.gs.restore_autosave()
+        elif self.gs.game_over_phase == 'FADE_OUT':
+            self.gs.game_over_alpha = max(
+                0, self.gs.game_over_alpha - 255 * delta_ms / 1200
+            )
+            if self.gs.game_over_alpha == 0:
+                self.gs.game_over_phase = None
 
         current_speed = 1 if self.gs.text_fast else self.gs.text_speed
 
@@ -189,8 +212,32 @@ class Game:
                         self.gs.text_timer = 0
                         
         elif self.gs.state == 'GAME_OVER':
-            if self.gs.game_over_alpha < 255:
-                self.gs.game_over_alpha = min(255, self.gs.game_over_alpha + 2)
+            pass
+
+        elif self.gs.state == 'PLAYING':
+            if self.gs.card_fade_alpha < 255:
+                self.gs.card_fade_alpha = min(255, self.gs.card_fade_alpha + 15)
+
+            if self.gs.card_animation_active:
+                self.gs.card_anim_y = max(self.gs.card_rect.y, self.gs.card_anim_y - 18)
+                active_card = self.gs.final_revolution_card if (
+                    self.gs.revolution_active and self.gs.revolution_timer <= 0
+                ) else (
+                    self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data
+                )
+                card_text_length = len(active_card["title"]) + len(active_card["desc"])
+                if self.gs.card_text_char_index < card_text_length:
+                    self.gs.card_text_timer += 1
+                    if self.gs.card_text_timer >= current_speed:
+                        self.gs.card_text_char_index += 1
+                        self.gs.card_text_timer = 0
+
+                if (
+                    self.gs.card_anim_y == self.gs.card_rect.y
+                    and self.gs.card_text_char_index >= card_text_length
+                ):
+                    self.gs.card_animation_active = False
+                    self.gs.text_fast = False
 
     def render(self):
         render_gradient_background(self.screen, self.tick_counter)
@@ -322,6 +369,8 @@ class Game:
             
         elif self.gs.state == 'PLAYING':
             card_draw_rect = pygame.Rect(self.gs.card_current_x, self.gs.card_rect.y, self.gs.card_rect.width, self.gs.card_rect.height)
+            if self.gs.card_animation_active:
+                card_draw_rect.y = self.gs.card_anim_y
             
             card_surf = pygame.Surface((card_draw_rect.width, card_draw_rect.height), pygame.SRCALPHA)
             card_bg_color = (COLOR_CARD_BG[0], COLOR_CARD_BG[1], COLOR_CARD_BG[2], self.gs.card_fade_alpha)
@@ -334,46 +383,38 @@ class Game:
             pygame.draw.rect(card_surf, (50, 65, 55, self.gs.card_fade_alpha), card_surf.get_rect().inflate(-8, -8), 1, border_radius=10)
             pygame.draw.rect(card_surf, (110, 135, 115, self.gs.card_fade_alpha), card_surf.get_rect().inflate(-16, -16), 1, border_radius=8)
             
-            title_words = active_card["title"].split(' ')
-            title_line = ""
-            title_y = 25
             max_title_width = card_draw_rect.width - 60
-            
-            for word in title_words:
-                test_title_line = title_line + word + " "
-                if FONT_TITLE.size(test_title_line)[0] > max_title_width:
-                    t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
-                    t_surf.set_alpha(self.gs.card_fade_alpha)
-                    card_surf.blit(t_surf, (30, title_y))
-                    title_y += 30
-                    title_line = word + " "
-                else:
-                    title_line = test_title_line
-            t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
-            t_surf.set_alpha(self.gs.card_fade_alpha)
-            card_surf.blit(t_surf, (30, title_y))
-            
-            words = active_card["desc"].split(' ')
-            line = ""
-            desc_y = title_y + 45
-            for word in words:
-                test_line = line + word + " "
-                if FONT_MAIN.size(test_line)[0] > max_title_width:
-                    desc_surf = FONT_MAIN.render(line, True, (190, 210, 195))
-                    desc_surf.set_alpha(self.gs.card_fade_alpha)
-                    card_surf.blit(desc_surf, (30, desc_y))
-                    desc_y += 24
-                    line = word + " "
-                else:
-                    line = test_line
-            desc_surf = FONT_MAIN.render(line, True, (190, 210, 195))
-            desc_surf.set_alpha(self.gs.card_fade_alpha)
-            card_surf.blit(desc_surf, (30, desc_y))
+            if self.gs.card_animation_active:
+                title_chars = min(self.gs.card_text_char_index, len(active_card["title"]))
+                desc_chars = max(0, self.gs.card_text_char_index - len(active_card["title"]))
+            else:
+                title_chars = len(active_card["title"])
+                desc_chars = len(active_card["desc"])
+            title_y = render_wrapped_text(
+                card_surf,
+                active_card["title"][:title_chars],
+                FONT_TITLE,
+                (225, 235, 228),
+                (30, 25),
+                max_title_width,
+                30,
+                self.gs.card_fade_alpha,
+            )
+            render_wrapped_text(
+                card_surf,
+                active_card["desc"][:desc_chars],
+                FONT_MAIN,
+                (190, 210, 195),
+                (30, title_y + 15),
+                max_title_width,
+                24,
+                self.gs.card_fade_alpha,
+            )
             
             self.screen.blit(card_surf, card_draw_rect.topleft)
             
             offset_delta = self.gs.card_current_x - self.gs.card_rect.x
-            if offset_delta < -35:
+            if not self.gs.card_animation_active and offset_delta < -35:
                 preview_surf = FONT_MAIN.render(active_card["left_preview"], True, COLOR_DANGER)
                 bg_surf = pygame.Surface((preview_surf.get_width() + 24, preview_surf.get_height() + 14), pygame.SRCALPHA)
                 bg_surf.fill((25, 12, 12, 240))
@@ -381,7 +422,7 @@ class Game:
                 bg_surf.blit(preview_surf, (12, 7))
                 self.screen.blit(bg_surf, (60, SCREEN_HEIGHT - 100))
                 
-            elif offset_delta > 35:
+            elif not self.gs.card_animation_active and offset_delta > 35:
                 preview_surf = FONT_MAIN.render(active_card["right_preview"], True, COLOR_ACCENT)
                 bg_surf = pygame.Surface((preview_surf.get_width() + 24, preview_surf.get_height() + 14), pygame.SRCALPHA)
                 bg_surf.fill((12, 25, 16, 240))
@@ -389,15 +430,14 @@ class Game:
                 bg_surf.blit(preview_surf, (12, 7))
                 self.screen.blit(bg_surf, (SCREEN_WIDTH - bg_surf.get_width() - 60, SCREEN_HEIGHT - 100))
 
-        if self.gs.state == 'GAME_OVER':
+        if self.gs.game_over_phase is not None:
             fade_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
             fade_overlay.fill(COLOR_BLACK)
-            fade_overlay.set_alpha(self.gs.game_over_alpha)
+            fade_overlay.set_alpha(round(self.gs.game_over_alpha))
             self.screen.blit(fade_overlay, (0, 0))
             
-            if self.gs.game_over_alpha > 50:
+            if self.gs.game_over_phase == 'HOLD':
                 defeat_surf = FONT_TITLE.render(get_text(self.gs.language, "game_over"), True, COLOR_DANGER)
-                defeat_surf.set_alpha(min(255, self.gs.game_over_alpha))
                 defeat_rect = defeat_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
                 self.screen.blit(defeat_surf, defeat_rect)
 

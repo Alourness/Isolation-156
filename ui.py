@@ -3,6 +3,34 @@ import pygame
 from config import *
 from localization import get_text
 
+def render_wrapped_text(surface, text, font, color, position, max_width, line_height, alpha=255):
+    x, y = position
+    for paragraph in text.split("\n"):
+        words = paragraph.split()
+        if not words:
+            y += line_height
+            continue
+
+        line = ""
+        for word in words:
+            candidate = word if not line else f"{line} {word}"
+            if line and font.size(candidate)[0] > max_width:
+                text_surface = font.render(line, True, color)
+                text_surface.set_alpha(alpha)
+                surface.blit(text_surface, (x, y))
+                y += line_height
+                line = word
+            else:
+                line = candidate
+
+        text_surface = font.render(line, True, color)
+        text_surface.set_alpha(alpha)
+        surface.blit(text_surface, (x, y))
+        y += line_height
+
+    return y
+
+
 def render_top_hud(screen, stats, turns_counter, language):
     panel_width = 1120
     panel_height = 65

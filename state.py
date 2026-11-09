@@ -26,6 +26,8 @@ class GameState:
         self.result_chunks = []
         
         self.game_over_alpha = 0
+        self.game_over_timer = 0
+        self.game_over_phase = None
         self.is_defeat = False
         
         self.stats = {
@@ -81,8 +83,71 @@ class GameState:
         self.card_drag_offset_x = 0
         self.is_dragging = False
         self.card_current_x = self.card_rect.x
+        self.card_anim_y = self.card_rect.y
+        self.card_animation_active = False
+        self.card_text_char_index = 0
+        self.card_text_timer = 0
         
         self.background_art = self.load_background_art()
+
+    def start_card_appearance(self):
+        self.state = 'PLAYING'
+        self.card_current_x = self.card_rect.x
+        self.card_anim_y = SCREEN_HEIGHT
+        self.card_animation_active = True
+        self.card_text_char_index = 0
+        self.card_text_timer = 0
+        self.card_fade_alpha = 0
+        self.result_phase = None
+        self.result_full_string = ""
+        self.result_chunks = []
+        self.pending_effects = None
+        self.displayed_text = ""
+        self.text_fast = False
+        self.is_dragging = False
+
+    def start_game_over(self):
+        self.state = 'GAME_OVER'
+        self.game_over_alpha = 0
+        self.game_over_timer = 0
+        self.game_over_phase = 'FADE_IN'
+        self.is_defeat = True
+
+    def restore_autosave(self):
+        data = self.auto_save
+        if data is None:
+            for stat in self.stats.values():
+                stat["val"] = 50
+            self.resources = {"matter": 150, "energy": 100}
+            self.reality_stability = 65
+            self.current_card_index = 0
+            self.turns_counter = 1
+            self.faith_zero_counter = 0
+            self.revolution_active = False
+            self.revolution_timer = 0
+        else:
+            for key, stat in self.stats.items():
+                stat["val"] = data["stats"].get(key, 50)
+            self.resources = data["resources"].copy()
+            self.reality_stability = data.get("reality", 65)
+            self.current_card_index = data.get("card_idx", 0) % len(self.cards_pool)
+            self.turns_counter = data.get("turns", 1)
+            self.faith_zero_counter = data.get("faith_zero_counter", 0)
+            self.revolution_active = data.get("revolution_active", False)
+            self.revolution_timer = data.get("revolution_timer", 0)
+
+        self.card_data = self.cards_pool[self.current_card_index]
+        self.is_defeat = False
+        self.result_phase = None
+        self.pending_effects = None
+        self.result_full_string = ""
+        self.result_chunks = []
+        self.displayed_text = ""
+        self.text_fast = False
+        self.game_over_timer = 0
+        self.game_over_phase = 'FADE_OUT'
+        self.game_over_alpha = 255
+        self.start_card_appearance()
 
     def set_language(self, language):
         if language not in LANGUAGES:
@@ -179,22 +244,13 @@ class GameState:
             self.resources["energy"] = max(0, self.resources["energy"] + effects["energy"])
             
         if self.is_defeat:
-            self.state = 'GAME_OVER'
+            self.start_game_over()
             return
             
         self.turns_counter += 1
-        if self.turns_counter % 5 == 0:
-            self.auto_save = {
-                "stats": {k: v["val"] for k, v in self.stats.items()},
-                "resources": self.resources.copy(),
-                "reality": self.reality_stability,
-                "card_idx": self.current_card_index
-            }
-            
         if self.revolution_active:
             if self.revolution_timer <= 0:
-                self.is_defeat = True
-                self.state = 'GAME_OVER'
+                self.start_game_over()
                 return
             else:
                 self.revolution_active = False
@@ -214,7 +270,18 @@ class GameState:
                         self.revolution_active = True
                     
             self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
-            self.card_data = self.cards_pool[self.current_card_index]
+
+        self.card_data = self.cards_pool[self.current_card_index]
+        if self.turns_counter % 5 == 0:
+            self.auto_save = {
+                "stats": {k: v["val"] for k, v in self.stats.items()},
+                "resources": self.resources.copy(),
+                "reality": self.reality_stability,
+                "card_idx": self.current_card_index,
+                "turns": self.turns_counter,
+                "faith_zero_counter": self.faith_zero_counter,
+                "revolution_active": self.revolution_active,
+                "revolution_timer": self.revolution_timer,
+            }
             
-        self.card_current_x = self.card_rect.x
-        self.card_fade_alpha = 0
+        self.start_card_appearance()

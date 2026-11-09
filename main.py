@@ -29,7 +29,6 @@ class Game:
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = event.pos
                 if self.gs.state == 'MENU':
-                    # Кнопки главного меню
                     if self.menu_btn_start.collidepoint(mouse_pos):
                         self.gs.state = 'INTRO_1'
                     elif self.menu_btn_saves.collidepoint(mouse_pos):
@@ -40,11 +39,9 @@ class Game:
                 elif self.gs.state == 'LOAD_MENU':
                     if self.back_btn_rect.collidepoint(mouse_pos):
                         self.gs.state = 'MENU'
-                    # Проверяем клики по 6 ячейкам слотов
                     for i, rect in enumerate(self.slot_rects):
                         if rect.collidepoint(mouse_pos):
                             if self.gs.save_slots[i] is not None:
-                                # Загружаем сохранение
                                 data = self.gs.save_slots[i]
                                 for k, v in data["stats"].items():
                                     self.gs.stats[k]["val"] = v
@@ -54,14 +51,12 @@ class Game:
                                 self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
                                 self.gs.state = 'PLAYING'
                             else:
-                                # Создаем сохранение в пустой слот
                                 self.gs.save_slots[i] = {
                                     "stats": {k: v["val"] for k, v in self.gs.stats.items()},
                                     "resources": self.gs.resources.copy(),
                                     "reality": self.gs.reality_stability,
                                     "card_idx": self.gs.current_card_index
                                 }
-                    # Клик по автосохранению для загрузки
                     if hasattr(self, 'auto_slot_rect') and self.auto_slot_rect.collidepoint(mouse_pos):
                         if self.gs.auto_save is not None:
                             data = self.gs.auto_save
@@ -72,29 +67,52 @@ class Game:
                             self.gs.current_card_index = data["card_idx"]
                             self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
                             self.gs.state = 'PLAYING'
+                elif self.gs.state == 'PLAYING':
+                    if self.gs.card_rect.collidepoint((event.pos[0] - (self.gs.card_current_x - self.gs.card_rect.x), event.pos[1])):
+                        self.gs.is_dragging = True
+                        self.gs.card_drag_offset_x = event.pos[0] - self.gs.card_current_x
+
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if self.gs.state == 'PLAYING' and self.gs.is_dragging:
+                    self.gs.is_dragging = False
+                    if self.gs.card_current_x < self.gs.card_rect.x - 120:
+                        self.gs.trigger_choice("LEFT")
+                    elif self.gs.card_current_x > self.gs.card_rect.x + 120:
+                        self.gs.trigger_choice("RIGHT")
+                    else:
+                        self.gs.card_current_x = self.gs.card_rect.x
+
+            elif event.type == pygame.MOUSEMOTION:
+                if self.gs.state == 'PLAYING' and self.gs.is_dragging:
+                    self.gs.card_current_x = event.pos[0] - self.gs.card_drag_offset_x
 
             elif event.type == pygame.KEYDOWN:
                 if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
                         target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else (self.gs.intro_texts[1] if self.gs.state == 'INTRO_2' else self.gs.intro_texts[2])
                         if self.gs.current_char_index < len(target_text):
-                            self.gs.displayed_text = target_text
-                            self.gs.current_char_index = len(target_text)
+                            # Если текст еще печатается — ускоряем его по пробелу
+                            self.gs.text_fast = True
                         else:
                             if self.gs.state == 'INTRO_1':
                                 self.gs.state = 'INTRO_2'
                                 self.gs.current_char_index = 0
                                 self.gs.displayed_text = ""
+                                self.gs.text_fast = False
                             elif self.gs.state == 'INTRO_2':
                                 self.gs.state = 'INTRO_3'
                                 self.gs.current_char_index = 0
                                 self.gs.displayed_text = ""
+                                self.gs.text_fast = False
                             else:
                                 self.gs.state = 'PLAYING'
                                 
                 elif self.gs.state == 'RESULT_WAIT':
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                        if self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_full_string):
+                        if self.gs.result_phase == 'TEXT' and self.gs.current_char_index < len(self.gs.result_full_string):
+                            # Ускоряем вывод текста последствий по пробелу
+                            self.gs.text_fast = True
+                        elif self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_full_string):
                             self.gs.apply_pending_effects()
                             if self.gs.state != 'GAME_OVER':
                                 self.gs.state = 'PLAYING'
@@ -102,29 +120,20 @@ class Game:
                             self.gs.result_phase = 'TEXT'
                             self.gs.current_char_index = 0
                             self.gs.displayed_text = ""
-                            
-            elif event.type == pygame.MOUSEBUTTONDOWN and self.gs.state == 'PLAYING':
-                if event.button == 1:
-                    if self.gs.card_rect.collidepoint((event.pos[0] - (self.gs.card_current_x - self.gs.card_rect.x), event.pos[1])):
-                        self.gs.is_dragging = True
-                        self.gs.card_drag_offset_x = event.pos[0] - self.gs.card_current_x
-                        
-            elif event.type == pygame.MOUSEBUTTONUP and self.gs.state == 'PLAYING':
-                if event.button == 1:
-                    if self.gs.is_dragging:
-                        self.gs.is_dragging = False
-                        if self.gs.card_current_x < self.gs.card_rect.x - 120:
-                            self.gs.trigger_choice("LEFT")
-                        elif self.gs.card_current_x > self.gs.card_rect.x + 120:
-                            self.gs.trigger_choice("RIGHT")
-                        else:
-                            self.gs.card_current_x = self.gs.card_rect.x
-                            
-            elif event.type == pygame.MOUSEMOTION and self.gs.state == 'PLAYING':
-                if self.gs.is_dragging:
-                    self.gs.card_current_x = event.pos[0] - self.gs.card_drag_offset_x
+                            self.gs.text_fast = False
 
     def update(self):
+        if self.gs.state == 'MENU':
+            if self.gs.menu_alpha > 0:
+                self.gs.menu_alpha = max(0, self.gs.menu_alpha - 5)
+
+        if self.gs.state == 'PLAYING':
+            if self.gs.card_fade_alpha < 255:
+                self.gs.card_fade_alpha = min(255, self.gs.card_fade_alpha + 15)
+
+        # Текущая скорость (ускоряется, если зажат/нажат пробел)
+        current_speed = 1 if self.gs.text_fast else self.gs.text_speed
+
         if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
             if self.gs.intro_alpha > 0:
                 self.gs.intro_alpha = max(0, self.gs.intro_alpha - 2)
@@ -132,8 +141,7 @@ class Game:
             target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else (self.gs.intro_texts[1] if self.gs.state == 'INTRO_2' else self.gs.intro_texts[2])
             if self.gs.current_char_index < len(target_text):
                 self.gs.text_timer += 1
-                # Замедлили скорость печатания текста (увеличили таймер до 4 кадров на символ)
-                if self.gs.text_timer >= 4:
+                if self.gs.text_timer >= current_speed:
                     self.gs.current_char_index += 1
                     if self.gs.current_char_index > len(target_text):
                         self.gs.current_char_index = len(target_text)
@@ -143,17 +151,19 @@ class Game:
         elif self.gs.state == 'RESULT_WAIT':
             if self.gs.result_phase == 'DOTS':
                 self.gs.result_timer += 1
-                if self.gs.result_timer > 20:
+                dots_speed = 5 if self.gs.text_fast else 20
+                if self.gs.result_timer > dots_speed:
                     self.gs.displayed_text += "."
                     self.gs.result_timer = 0
                     if len(self.gs.displayed_text) >= 3:
                         self.gs.result_phase = 'TEXT'
                         self.gs.current_char_index = 0
                         self.gs.displayed_text = ""
+                        self.gs.text_fast = False
             elif self.gs.result_phase == 'TEXT':
                 if self.gs.current_char_index < len(self.gs.result_full_string):
                     self.gs.text_timer += 1
-                    if self.gs.text_timer >= 4:
+                    if self.gs.text_timer >= current_speed:
                         self.gs.current_char_index += 1
                         if self.gs.current_char_index > len(self.gs.result_full_string):
                             self.gs.current_char_index = len(self.gs.result_full_string)
@@ -202,7 +212,6 @@ class Game:
             title_surf = FONT_TITLE.render("ЯЧЕЙКИ СОХРАНЕНИЙ", True, COLOR_TEXT)
             self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 60))
             
-            # Автосохранение слева
             auto_label = FONT_SMALL.render("АВТОСОХРАНЕНИЕ", True, COLOR_WARNING)
             self.screen.blit(auto_label, (100, 130))
             self.auto_slot_rect = pygame.Rect(100, 160, 260, 420)
@@ -215,7 +224,6 @@ class Game:
                 as_text = FONT_MAIN.render("пусто", True, (100, 110, 105))
                 self.screen.blit(as_text, (self.auto_slot_rect.centerx - as_text.get_width() // 2, self.auto_slot_rect.centery))
 
-            # 6 ячеек справа в сетке 3x2
             self.slot_rects = []
             grid_x, grid_y = 400, 160
             for i in range(6):
@@ -246,7 +254,6 @@ class Game:
             self.screen.blit(b_text, (self.back_btn_rect.centerx - b_text.get_width() // 2, self.back_btn_rect.centery - b_text.get_height() // 2))
 
         else:
-            # В процессе игры: стабильность реальности показывается только после прохождения интро
             render_top_hud(self.screen, self.gs.stats)
             render_side_economy(self.screen, self.gs.resources)
             if self.gs.state not in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
@@ -297,35 +304,40 @@ class Game:
                 
             self.screen.blit(dialog_surface, (dialog_x, dialog_y))
             
-            prompt_surf = FONT_SMALL.render("[ Нажмите SPACE, чтобы продолжить ]", True, COLOR_ACCENT)
+            prompt_surf = FONT_SMALL.render("[ Нажмите SPACE для ускорения / продолжения ]", True, COLOR_ACCENT)
             self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
             
         elif self.gs.state == 'PLAYING':
             card_draw_rect = pygame.Rect(self.gs.card_current_x, self.gs.card_rect.y, self.gs.card_rect.width, self.gs.card_rect.height)
             
-            pygame.draw.rect(self.screen, COLOR_CARD_BG, card_draw_rect, border_radius=12)
-            pygame.draw.rect(self.screen, (90, 110, 95), card_draw_rect, 3, border_radius=12)
-            pygame.draw.rect(self.screen, (50, 65, 55), card_draw_rect.inflate(-8, -8), 1, border_radius=10)
-            pygame.draw.rect(self.screen, (110, 135, 115), card_draw_rect.inflate(-16, -16), 1, border_radius=8)
+            card_surf = pygame.Surface((card_draw_rect.width, card_draw_rect.height), pygame.SRCALPHA)
+            card_bg_color = (COLOR_CARD_BG[0], COLOR_CARD_BG[1], COLOR_CARD_BG[2], self.gs.card_fade_alpha)
+            
+            pygame.draw.rect(card_surf, card_bg_color, card_surf.get_rect(), border_radius=12)
+            pygame.draw.rect(card_surf, (90, 110, 95, self.gs.card_fade_alpha), card_surf.get_rect(), 3, border_radius=12)
+            pygame.draw.rect(card_surf, (50, 65, 55, self.gs.card_fade_alpha), card_surf.get_rect().inflate(-8, -8), 1, border_radius=10)
+            pygame.draw.rect(card_surf, (110, 135, 115, self.gs.card_fade_alpha), card_surf.get_rect().inflate(-16, -16), 1, border_radius=8)
             
             active_card = self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data
             
             title_words = active_card["title"].split(' ')
             title_line = ""
-            title_y = card_draw_rect.y + 25
+            title_y = 25
             max_title_width = card_draw_rect.width - 60
             
             for word in title_words:
                 test_title_line = title_line + word + " "
                 if FONT_TITLE.size(test_title_line)[0] > max_title_width:
                     t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
-                    self.screen.blit(t_surf, (card_draw_rect.x + 30, title_y))
+                    t_surf.set_alpha(self.gs.card_fade_alpha)
+                    card_surf.blit(t_surf, (30, title_y))
                     title_y += 30
                     title_line = word + " "
                 else:
                     title_line = test_title_line
             t_surf = FONT_TITLE.render(title_line, True, (225, 235, 228))
-            self.screen.blit(t_surf, (card_draw_rect.x + 30, title_y))
+            t_surf.set_alpha(self.gs.card_fade_alpha)
+            card_surf.blit(t_surf, (30, title_y))
             
             words = active_card["desc"].split(' ')
             line = ""
@@ -334,13 +346,17 @@ class Game:
                 test_line = line + word + " "
                 if FONT_MAIN.size(test_line)[0] > max_title_width:
                     desc_surf = FONT_MAIN.render(line, True, (190, 210, 195))
-                    self.screen.blit(desc_surf, (card_draw_rect.x + 30, desc_y))
+                    desc_surf.set_alpha(self.gs.card_fade_alpha)
+                    card_surf.blit(desc_surf, (30, desc_y))
                     desc_y += 24
                     line = word + " "
                 else:
                     line = test_line
             desc_surf = FONT_MAIN.render(line, True, (190, 210, 195))
-            self.screen.blit(desc_surf, (card_draw_rect.x + 30, desc_y))
+            desc_surf.set_alpha(self.gs.card_fade_alpha)
+            card_surf.blit(desc_surf, (30, desc_y))
+            
+            self.screen.blit(card_surf, card_draw_rect.topleft)
             
             offset_delta = self.gs.card_current_x - self.gs.card_rect.x
             if offset_delta < -35:
@@ -370,6 +386,12 @@ class Game:
                 defeat_surf.set_alpha(min(255, self.gs.game_over_alpha))
                 defeat_rect = defeat_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
                 self.screen.blit(defeat_surf, defeat_rect)
+
+        if self.gs.menu_alpha > 0 and self.gs.state == 'MENU':
+            menu_fade = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            menu_fade.fill(COLOR_BLACK)
+            menu_fade.set_alpha(self.gs.menu_alpha)
+            self.screen.blit(menu_fade, (0, 0))
 
         if self.gs.intro_alpha > 0 and self.gs.state not in ('GAME_OVER', 'MENU', 'LOAD_MENU'):
             fade_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))

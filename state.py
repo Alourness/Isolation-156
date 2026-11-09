@@ -6,6 +6,8 @@ class GameState:
     def __init__(self):
         self.state = 'MENU'
         self.intro_alpha = 255
+        self.menu_alpha = 255
+        self.card_fade_alpha = 255
         
         self.intro_texts = [
             (
@@ -28,7 +30,8 @@ class GameState:
         self.current_char_index = 0
         self.displayed_text = ""
         self.text_timer = 0
-        self.text_speed = 3
+        self.text_speed = 4  # Базовая скорость печатания
+        self.text_fast = False  # Флаг ускорения по пробелу
         
         self.result_phase = None
         self.result_timer = 0
@@ -165,6 +168,7 @@ class GameState:
         self.result_timer = 0
         self.result_phase = 'DOTS'
         self.current_char_index = 0
+        self.text_fast = False
 
     def apply_pending_effects(self):
         effects = self.pending_effects
@@ -215,3 +219,4 @@ class GameState:
             self.card_data = self.cards_pool[self.current_card_index]
             
         self.card_current_x = self.card_rect.x
+        self.card_fade_alpha = 0

@@ -50,10 +50,11 @@ class GameState:
         self.save_slots = [None] * 6
         self.auto_save = None
         
+        # Добавили влияние на reality (стабильность реальности) в новые и старые карточки
         self.card_effects = [
             {
-                "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0},
-                "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0},
+                "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0, "reality": 1},
+                "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0, "reality": -1},
                 "critical": False
             },
             {
@@ -62,18 +63,18 @@ class GameState:
                 "critical": False
             },
             {
-                "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0},
-                "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3},
+                "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0, "reality": -2},
+                "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3, "reality": 1},
                 "critical": False
             },
             {
-                "left_effects": {"faith": -5, "order": 5, "matter": 10},
-                "right_effects": {"faith": 8, "energy": -15, "order": 0},
+                "left_effects": {"faith": -5, "order": 5, "matter": 10, "reality": -1},
+                "right_effects": {"faith": 8, "energy": -15, "order": 0, "reality": 2},
                 "critical": False
             },
             {
-                "left_effects": {"faith": 0, "hab": -6, "order": -8},
-                "right_effects": {"energy": -25, "hab": 2, "order": 3},
+                "left_effects": {"faith": 0, "hab": -6, "order": -8, "reality": -2},
+                "right_effects": {"energy": -25, "hab": 2, "order": 3, "reality": 1},
                 "critical": False
             }
         ]
@@ -206,16 +207,30 @@ class GameState:
             
         if direction == "LEFT":
             self.displayed_text = ""
-            self.pending_effects = card["left_effects"]
+            raw_effects = card["left_effects"]
             self.result_text_full = card["left_result"]
             if self.revolution_active:
                 self.is_defeat = True
         else:
             self.displayed_text = ""
-            self.pending_effects = card["right_effects"]
+            raw_effects = card["right_effects"]
             self.result_text_full = card["right_result"]
             if self.revolution_active and self.revolution_timer <= 0:
                 self.is_defeat = True
+
+        # Проверка: если стат уже 0, а эффект отрицательный (понижение), то оно отменяется
+        filtered_effects = {}
+        for key, val in raw_effects.items():
+            if val < 0:
+                if key in self.stats and self.stats[key]["val"] == 0:
+                    continue  # Пропускаем понижение, если стат уже 0
+                if key in ["matter", "energy"] and self.resources[key] == 0:
+                    continue  # Пропускаем трату ресурсов, если их уже 0
+                if key == "reality" and self.reality_stability == 0:
+                    continue
+            filtered_effects[key] = val
+
+        self.pending_effects = filtered_effects
             
         name_map = get_text(self.language, "effect_names")
         
@@ -233,6 +248,11 @@ class GameState:
             for idx, (text_str, is_pos) in enumerate(delta_parts):
                 col = COLOR_ACCENT if is_pos else COLOR_DANGER
                 self.result_chunks.append((text_str + ("   " if idx < len(delta_parts) - 1 else ""), col))
+        else:
+            # Если после фильтрации не осталось ни одного изменения
+            self.result_chunks.append(("\n", COLOR_TEXT))
+            nothing_text = "Ничего не произошло" if self.language == "ru" else "Nothing happened"
+            self.result_chunks.append((nothing_text, (150, 150, 150)))
 
         self.result_full_string = "".join([chunk[0] for chunk in self.result_chunks])
 

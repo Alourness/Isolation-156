@@ -26,6 +26,7 @@ TEXT = {
         "reality": "СТАБИЛЬНОСТЬ РЕАЛЬНОСТИ",
         "continue_prompt": "[ Нажмите SPACE для ускорения / продолжения ]",
         "game_over": "ПОРАЖЕНИЕ",
+        "nothing_happened": "Ничего не произошло",
         "stats": {
             "faith": "ВЕРА ЛЮДЕЙ",
             "army": "СИЛА АРМИИ",
@@ -130,6 +131,7 @@ TEXT = {
         "reality": "REALITY STABILITY",
         "continue_prompt": "[ Press SPACE to speed up / continue ]",
         "game_over": "DEFEAT",
+        "nothing_happened": "Nothing happened",
         "stats": {
             "faith": "HUMAN FAITH",
             "army": "MILITARY POWER",

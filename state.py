@@ -60,6 +60,21 @@ class GameState:
                 "left_effects": {"reality": 5, "energy": -10, "order": 0},
                 "right_effects": {"reality": -5, "order": 5, "faith": -5},
                 "critical": False
+            },
+            {
+                "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0},
+                "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3},
+                "critical": False
+            },
+            {
+                "left_effects": {"faith": -5, "order": 5, "matter": 10},
+                "right_effects": {"faith": 8, "energy": -15, "order": 0},
+                "critical": False
+            },
+            {
+                "left_effects": {"faith": 0, "hab": -6, "order": -8},
+                "right_effects": {"energy": -25, "hab": 2, "order": 3},
+                "critical": False
             }
         ]
         

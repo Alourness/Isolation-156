@@ -1,6 +1,6 @@
 import os
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_ACCENT, COLOR_DANGER
 
 class GameState:
     def __init__(self):
@@ -28,18 +28,19 @@ class GameState:
         self.current_char_index = 0
         self.displayed_text = ""
         self.text_timer = 0
-        self.text_speed = 3
+        self.text_speed = 1
         
         self.result_phase = None
         self.result_timer = 0
         self.pending_effects = None
-        self.result_deltas = []
+        self.result_full_string = ""
+        self.result_chunks = []
         
         self.stats = {
             "Вера людей": {"val": 50, "color": (210, 175, 70)},
             "Сила армии": {"val": 50, "color": (195, 65, 65)},
             "Жизнепригодность": {"val": 50, "color": (50, 180, 110)},
-            "Политическая стab.": {"val": 50, "color": (130, 95, 195)},
+            "Политическая\nстабильность": {"val": 50, "color": (130, 95, 195)},
             "Порядок": {"val": 50, "color": (210, 125, 50)}
         }
         
@@ -50,28 +51,43 @@ class GameState:
             "Энергия": 80
         }
         
+        self.faith_zero_counter = 0
+        self.revolution_active = False
+        self.revolution_timer = 0
+        
         self.cards_pool = [
             {
                 "title": "УГРОЗА ВОЗДУШНОГО ФИЛЬТРА",
                 "desc": "Начальник нижнего технического цеха докладывает о критическом износе турбин. Без ремонта уровень удушья в жилых блоках возрастет.",
-                "left_preview": "ОТКАЗАТЬ: Сэкономить Материю, уронить Веру людей",
-                "right_preview": "ВЫДЕЛИТЬ ДЕТАЛИ: Потратить Материю, поднять Жизнепригодность",
-                "left_result": "Вы отказали техникам. Густой углекислотный туман медленно заполняет нижние уровни.",
+                "left_preview": "ОТКАЗАТЬ: Вероятно, упадет Вера людей; возможно, пошатнется Порядок.",
+                "right_preview": "ВЫДЕЛИТЬ ДЕТАЛИ: Есть риск истощить Материю, но поднимется Жизнепригодность.",
+                "left_result": "Вы отказали техникам ради экономии. Густой туман заполняет нижние уровни, вызывая глухой ропот.",
                 "right_result": "Запасные детали доставлены в цех. Турбины взревели новыми оборотами, очищая воздух.",
-                "left_effects": {"faith": -15, "matter": 25, "hab": 0},
-                "right_effects": {"faith": 0, "matter": -30, "hab": 15}
+                "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0},
+                "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0}
             },
             {
                 "title": "ПРОРЫВ АНОМАЛИИ В СЕКТОРЕ С",
-                "desc": "Датчики фиксируют искажение пространственной сетки за перегородкой жилого блока. Физические законы там начинают деформироваться.",
-                "left_preview": "УЦЕПИТЬСЯ ЗА СТАБИЛЬНОСТЬ: Рискнуть энергией полей",
-                "right_preview": "ЗАБЕТОНИРОВАТЬ ОТСЕК: Замуровать аномалию вместе с частью людей",
-                "left_result": "Защитные контуры удержали разлом ценой чудовищного скачка энергопотребления.",
-                "right_result": "Автоматические бетононасосы залили отсек за считанные минуты. Крики стихли.",
-                "left_effects": {"reality": 10, "energy": -25, "order": 0},
-                "right_effects": {"reality": -15, "order": 15, "faith": -10}
+                "desc": "Датчики фиксируют искажение пространственной сетки за перегородкой жилого блока. Законы физики деформируются.",
+                "left_preview": "УЦЕПИТЬСЯ: Стабильность реальности может вырасти, но Энергия имеет вероятность упасть.",
+                "right_preview": "ЗАБЕТОНИРОВАТЬ: Порядок может подняться, но Вера людей и Реальность могут пострадать.",
+                "left_result": "Защитные контуры удержали разлом ценой скачка энергопотребления в сетях.",
+                "right_result": "Автоматические бетононасосы залили отсек за считанные минуты. Крики затихли под монолитом.",
+                "left_effects": {"reality": 5, "energy": -10, "order": 0},
+                "right_effects": {"reality": -5, "order": 5, "faith": -5}
             }
         ]
+        
+        self.revolution_card = {
+            "title": "ВОССТАНИЕ В НИЖНИХ УРОВНЯХ",
+            "desc": "Народный гнев прорвал блокаду секторов! Толпы с арматурой идут штурмовать административный уровень. Требуется срочно бросить в бой армию и задействовать резервы казны!",
+            "left_preview": "СДАТЬ ПОСТЫ: Полный коллапс власти и гибель сектора.",
+            "right_preview": "ПОДАВИТЬ БУНТ: Потратить много Материи и задействовать Силу армии.",
+            "left_result": "Толпы ворвались в кабинет. Ваше правление пало в огне всеобщего хаоса.",
+            "right_result": "Армия жестоко подавила восстание на улицах. Порядок восстановлен, но сектор в крови.",
+            "left_effects": {"faith": -100, "matter": 0, "hab": 0, "order": -100},
+            "right_effects": {"matter": -40, "army": 15, "order": 10, "faith": -10}
+        }
         
         self.current_card_index = 0
         self.card_data = self.cards_pool[self.current_card_index]
@@ -95,7 +111,11 @@ class GameState:
         return None
 
     def trigger_choice(self, direction):
-        card = self.cards_pool[self.current_card_index]
+        if self.revolution_active:
+            card = self.revolution_card
+        else:
+            card = self.cards_pool[self.current_card_index]
+            
         if direction == "LEFT":
             self.displayed_text = ""
             self.pending_effects = card["left_effects"]
@@ -105,20 +125,32 @@ class GameState:
             self.pending_effects = card["right_effects"]
             self.result_text_full = card["right_result"]
             
-        self.result_deltas = []
         name_map = {
             "faith": "Вера людей",
             "hab": "Жизнепригодность",
             "order": "Порядок",
             "reality": "Стаб. реальности",
             "matter": "Материя",
-            "energy": "Энергия"
+            "energy": "Энергия",
+            "army": "Сила армии"
         }
+        
+        self.result_chunks = [(self.result_text_full, COLOR_TEXT)]
+        
+        delta_parts = []
         for key, val in self.pending_effects.items():
             if val != 0:
                 sign = "+" if val > 0 else ""
                 name = name_map.get(key, key)
-                self.result_deltas.append((f"{name}: {sign}{val}", val > 0))
+                delta_parts.append((f"{name}: {sign}{val}", val > 0))
+                
+        if delta_parts:
+            self.result_chunks.append(("\n", COLOR_TEXT))
+            for idx, (text_str, is_pos) in enumerate(delta_parts):
+                col = COLOR_ACCENT if is_pos else COLOR_DANGER
+                self.result_chunks.append((text_str + ("   " if idx < len(delta_parts) - 1 else ""), col))
+
+        self.result_full_string = "".join([chunk[0] for chunk in self.result_chunks])
 
         self.state = 'RESULT_WAIT'
         self.result_timer = 0
@@ -133,13 +165,30 @@ class GameState:
             self.stats["Жизнепригодность"]["val"] = max(0, min(100, self.stats["Жизнепригодность"]["val"] + effects["hab"]))
         if "order" in effects:
             self.stats["Порядок"]["val"] = max(0, min(100, self.stats["Порядок"]["val"] + effects["order"]))
+        if "army" in effects:
+            self.stats["Сила армии"]["val"] = max(0, min(100, self.stats["Сила армии"]["val"] + effects["army"]))
         if "reality" in effects:
             self.reality_stability = max(0, min(100, self.reality_stability + effects["reality"]))
         if "matter" in effects:
-            self.resources["Материя"] += effects["matter"]
+            self.resources["Материя"] = max(0, self.resources["Материя"] + effects["matter"])
         if "energy" in effects:
-            self.resources["Энергия"] += effects["energy"]
+            self.resources["Энергия"] = max(0, self.resources["Энергия"] + effects["energy"])
             
-        self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
-        self.card_data = self.cards_pool[self.current_card_index]
+        if self.revolution_active:
+            self.revolution_active = False
+            self.revolution_timer = 9
+        else:
+            if self.stats["Вера людей"]["val"] == 0:
+                self.faith_zero_counter += 1
+                if self.faith_zero_counter >= 3:
+                    if self.revolution_timer <= 0:
+                        self.revolution_active = True
+            else:
+                self.faith_zero_counter = 0
+                if self.revolution_timer > 0:
+                    self.revolution_timer -= 1
+                    
+            self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
+            self.card_data = self.cards_pool[self.current_card_index]
+            
         self.card_current_x = self.card_rect.x

@@ -4,7 +4,7 @@ from config import *
 
 def render_top_hud(screen, stats):
     panel_width = 980
-    panel_height = 55
+    panel_height = 65
     panel_x = 20
     panel_y = 15
     
@@ -20,11 +20,15 @@ def render_top_hud(screen, stats):
         val = data["val"]
         color = data["color"]
         
-        label_surf = FONT_HUD.render(stat_name, True, color)
-        hud_surf.blit(label_surf, (x_offset, 10))
-        
+        lines = stat_name.split('\n')
+        line_y = 8
+        for line in lines:
+            label_surf = FONT_HUD.render(line, True, color)
+            hud_surf.blit(label_surf, (x_offset, line_y))
+            line_y += 14
+            
         bar_x = x_offset
-        bar_y = 30
+        bar_y = 38
         pygame.draw.rect(hud_surf, (25, 35, 28), (bar_x, bar_y, bar_width, bar_height), border_radius=3)
         
         fill_w = int((val / 100.0) * bar_width)

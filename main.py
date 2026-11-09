@@ -45,7 +45,7 @@ class Game:
                                 
                 elif self.gs.state == 'RESULT_WAIT':
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                        if self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_text_full):
+                        if self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_full_string):
                             self.gs.apply_pending_effects()
                             self.gs.state = 'PLAYING'
                         elif self.gs.result_phase == 'DOTS':
@@ -83,14 +83,16 @@ class Game:
             if self.gs.current_char_index < len(target_text):
                 self.gs.text_timer += 1
                 if self.gs.text_timer >= self.gs.text_speed:
-                    self.gs.current_char_index += 1
+                    self.gs.current_char_index += 2
+                    if self.gs.current_char_index > len(target_text):
+                        self.gs.current_char_index = len(target_text)
                     self.gs.displayed_text = target_text[:self.gs.current_char_index]
                     self.gs.text_timer = 0
                     
         elif self.gs.state == 'RESULT_WAIT':
             if self.gs.result_phase == 'DOTS':
                 self.gs.result_timer += 1
-                if self.gs.result_timer > 30:
+                if self.gs.result_timer > 15:
                     self.gs.displayed_text += "."
                     self.gs.result_timer = 0
                     if len(self.gs.displayed_text) >= 3:
@@ -98,11 +100,25 @@ class Game:
                         self.gs.current_char_index = 0
                         self.gs.displayed_text = ""
             elif self.gs.result_phase == 'TEXT':
-                if self.gs.current_char_index < len(self.gs.result_text_full):
+                if self.gs.current_char_index < len(self.gs.result_full_string):
                     self.gs.text_timer += 1
                     if self.gs.text_timer >= self.gs.text_speed:
-                        self.gs.current_char_index += 1
-                        self.gs.displayed_text = self.gs.result_text_full[:self.gs.current_char_index]
+                        self.gs.current_char_index += 2
+                        if self.gs.current_char_index > len(self.gs.result_full_string):
+                            self.gs.current_char_index = len(self.gs.result_full_string)
+                        
+                        chars_left = self.gs.current_char_index
+                        current_rendered_chunks = []
+                        for text_chunk, col in self.gs.result_chunks:
+                            if chars_left <= 0:
+                                break
+                            if len(text_chunk) <= chars_left:
+                                current_rendered_chunks.append((text_chunk, col))
+                                chars_left -= len(text_chunk)
+                            else:
+                                current_rendered_chunks.append((text_chunk[:chars_left], col))
+                                chars_left = 0
+                        self.gs.current_rendered_chunks = current_rendered_chunks
                         self.gs.text_timer = 0
 
     def render(self):
@@ -125,21 +141,37 @@ class Game:
             
             pygame.draw.rect(dialog_surface, COLOR_ACCENT, dialog_surface.get_rect(), 2, border_radius=8)
             
-            lines = self.gs.displayed_text.split('\n')
-            y_offset = 18
-            for line in lines:
-                text_surf = FONT_MAIN.render(line, True, COLOR_TEXT)
-                dialog_surface.blit(text_surf, (25, y_offset))
-                y_offset += 30
-                
-            if self.gs.state == 'RESULT_WAIT' and self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_text_full):
-                delta_x = 25
-                delta_y = y_offset + 5
-                for text, is_pos in self.gs.result_deltas:
-                    col = COLOR_ACCENT if is_pos else COLOR_DANGER
-                    delta_surf = FONT_MAIN.render(text, True, col)
-                    dialog_surface.blit(delta_surf, (delta_x, delta_y))
-                    delta_x += delta_surf.get_width() + 25
+            if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
+                lines = self.gs.displayed_text.split('\n')
+                y_offset = 18
+                for line in lines:
+                    text_surf = FONT_MAIN.render(line, True, COLOR_TEXT)
+                    dialog_surface.blit(text_surf, (25, y_offset))
+                    y_offset += 30
+            elif self.gs.state == 'RESULT_WAIT':
+                if self.gs.result_phase == 'DOTS':
+                    text_surf = FONT_MAIN.render(self.gs.displayed_text, True, COLOR_TEXT)
+                    dialog_surface.blit(text_surf, (25, 18))
+                elif self.gs.result_phase == 'TEXT':
+                    chunks = getattr(self.gs, 'current_rendered_chunks', [])
+                    current_x = 25
+                    current_y = 18
+                    for text_chunk, col in chunks:
+                        if "\n" in text_chunk:
+                            parts = text_chunk.split("\n")
+                            for i, part in enumerate(parts):
+                                if i > 0:
+                                    current_x = 25
+                                    current_y += 30
+                                if part:
+                                    part_surf = FONT_MAIN.render(part, True, col)
+                                    dialog_surface.blit(part_surf, (current_x, current_y))
+                                    current_x += part_surf.get_width()
+                        else:
+                            if text_chunk:
+                                chunk_surf = FONT_MAIN.render(text_chunk, True, col)
+                                dialog_surface.blit(chunk_surf, (current_x, current_y))
+                                current_x += chunk_surf.get_width()
                 
             self.screen.blit(dialog_surface, (dialog_x, dialog_y))
             
@@ -158,18 +190,20 @@ class Game:
             pygame.draw.rect(self.screen, (50, 65, 55), card_draw_rect.inflate(-8, -8), 1, border_radius=10)
             pygame.draw.rect(self.screen, (110, 135, 115), card_draw_rect.inflate(-16, -16), 1, border_radius=8)
             
-            title_surf = FONT_TITLE.render(self.gs.card_data["title"], True, (225, 235, 228))
+            active_card = self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data
+            
+            title_surf = FONT_TITLE.render(active_card["title"], True, (225, 235, 228))
             self.screen.blit(title_surf, (card_draw_rect.x + 30, card_draw_rect.y + 30))
             
-            desc_y = card_draw_rect.y + 90
-            words = self.gs.card_data["desc"].split(' ')
+            words = active_card["desc"].split(' ')
             line = ""
+            desc_y = card_draw_rect.y + 90
             for word in words:
                 test_line = line + word + " "
                 if FONT_MAIN.size(test_line)[0] > card_draw_rect.width - 60:
                     desc_surf = FONT_MAIN.render(line, True, (190, 210, 195))
                     self.screen.blit(desc_surf, (card_draw_rect.x + 30, desc_y))
-                    desc_y += 26
+                    desc_y += 24
                     line = word + " "
                 else:
                     line = test_line
@@ -178,7 +212,7 @@ class Game:
             
             offset_delta = self.gs.card_current_x - self.gs.card_rect.x
             if offset_delta < -35:
-                preview_surf = FONT_MAIN.render(self.gs.card_data["left_preview"], True, COLOR_DANGER)
+                preview_surf = FONT_MAIN.render(active_card["left_preview"], True, COLOR_DANGER)
                 bg_surf = pygame.Surface((preview_surf.get_width() + 24, preview_surf.get_height() + 14), pygame.SRCALPHA)
                 bg_surf.fill((25, 12, 12, 240))
                 pygame.draw.rect(bg_surf, COLOR_DANGER, bg_surf.get_rect(), 2, border_radius=4)
@@ -186,7 +220,7 @@ class Game:
                 self.screen.blit(bg_surf, (60, SCREEN_HEIGHT - 100))
                 
             elif offset_delta > 35:
-                preview_surf = FONT_MAIN.render(self.gs.card_data["right_preview"], True, COLOR_ACCENT)
+                preview_surf = FONT_MAIN.render(active_card["right_preview"], True, COLOR_ACCENT)
                 bg_surf = pygame.Surface((preview_surf.get_width() + 24, preview_surf.get_height() + 14), pygame.SRCALPHA)
                 bg_surf.fill((12, 25, 16, 240))
                 pygame.draw.rect(bg_surf, COLOR_ACCENT, bg_surf.get_rect(), 2, border_radius=4)
@@ -202,5 +236,5 @@ class Game:
         pygame.display.flip()
 
 if __name__ == "__main__":
-    game = Game()
+    game: Game = Game()
     game.run()

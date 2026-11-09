@@ -4,7 +4,7 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_ACCENT, COLOR_
 
 class GameState:
     def __init__(self):
-        self.state = 'INTRO_1'
+        self.state = 'MENU'
         self.intro_alpha = 255
         
         self.intro_texts = [
@@ -28,7 +28,7 @@ class GameState:
         self.current_char_index = 0
         self.displayed_text = ""
         self.text_timer = 0
-        self.text_speed = 1
+        self.text_speed = 3
         
         self.result_phase = None
         self.result_timer = 0
@@ -50,13 +50,17 @@ class GameState:
         self.reality_stability = 65
         
         self.resources = {
-            "Материя": 100,
-            "Энергия": 80
+            "Материя": 150,
+            "Энергия": 100
         }
         
         self.faith_zero_counter = 0
         self.revolution_active = False
         self.revolution_timer = 0
+        self.turns_counter = 0
+        
+        self.save_slots = [None] * 6
+        self.auto_save = None
         
         self.cards_pool = [
             {
@@ -85,11 +89,11 @@ class GameState:
             "title": "ВОССТАНИЕ В НИЖНИХ УРОВНЯХ",
             "desc": "Народный гнев прорвал блокаду секторов! Толпы с арматурой идут штурмовать административный уровень. Требуется срочно бросить в бой армию и задействовать резервы казны!",
             "left_preview": "СДАТЬ ПОСТЫ: Полный коллапс власти и гибель сектора.",
-            "right_preview": "ПОДАВИТЬ БУНТ: Потратить много Материи и задействовать Силу армии.",
+            "right_preview": "ПОДАВИТЬ БУНТ: Потратить 100 Материи и 30 Энергии для жесткого подавления.",
             "left_result": "Толпы ворвались в кабинет. Ваше правление пало в огне всеобщего хаоса.",
             "right_result": "Армия жестоко подавила восстание на улицах. Порядок восстановлен, но сектор в крови.",
             "left_effects": {"faith": -100, "matter": 0, "hab": 0, "order": -100},
-            "right_effects": {"matter": -40, "army": 15, "order": 10, "faith": -10}
+            "right_effects": {"matter": -100, "energy": -30, "army": 15, "order": 10}
         }
         
         self.current_card_index = 0
@@ -183,9 +187,19 @@ class GameState:
             self.state = 'GAME_OVER'
             return
             
+        self.turns_counter += 1
+        if self.turns_counter % 5 == 0:
+            self.auto_save = {
+                "stats": {k: v["val"] for k, v in self.stats.items()},
+                "resources": self.resources.copy(),
+                "reality": self.reality_stability,
+                "card_idx": self.current_card_index
+            }
+            
         if self.revolution_active:
             self.revolution_active = False
             self.revolution_timer = 9
+            self.faith_zero_counter = 0
         else:
             if self.stats["Вера людей"]["val"] == 0:
                 self.faith_zero_counter += 1

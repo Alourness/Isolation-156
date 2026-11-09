@@ -2,7 +2,7 @@ import sys
 import pygame
 from config import *
 from state import GameState
-from ui import render_top_hud, render_side_economy, render_anomaly_radial
+from ui import render_top_hud, render_side_economy, render_anomaly_radial, render_gradient_background
 
 class Game:
     def __init__(self):
@@ -10,9 +10,11 @@ class Game:
         pygame.display.set_caption("Isolation-156")
         self.clock = pygame.time.Clock()
         self.gs = GameState()
+        self.tick_counter = 0
 
     def run(self):
         while True:
+            self.tick_counter += 1
             self.handle_events()
             self.update()
             self.render()
@@ -24,6 +26,53 @@ class Game:
                 pygame.quit()
                 sys.exit()
                 
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = event.pos
+                if self.gs.state == 'MENU':
+                    # Кнопки главного меню
+                    if self.menu_btn_start.collidepoint(mouse_pos):
+                        self.gs.state = 'INTRO_1'
+                    elif self.menu_btn_saves.collidepoint(mouse_pos):
+                        self.gs.state = 'LOAD_MENU'
+                    elif self.menu_btn_exit.collidepoint(mouse_pos):
+                        pygame.quit()
+                        sys.exit()
+                elif self.gs.state == 'LOAD_MENU':
+                    if self.back_btn_rect.collidepoint(mouse_pos):
+                        self.gs.state = 'MENU'
+                    # Проверяем клики по 6 ячейкам слотов
+                    for i, rect in enumerate(self.slot_rects):
+                        if rect.collidepoint(mouse_pos):
+                            if self.gs.save_slots[i] is not None:
+                                # Загружаем сохранение
+                                data = self.gs.save_slots[i]
+                                for k, v in data["stats"].items():
+                                    self.gs.stats[k]["val"] = v
+                                self.gs.resources = data["resources"].copy()
+                                self.gs.reality_stability = data["reality"]
+                                self.gs.current_card_index = data["card_idx"]
+                                self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
+                                self.gs.state = 'PLAYING'
+                            else:
+                                # Создаем сохранение в пустой слот
+                                self.gs.save_slots[i] = {
+                                    "stats": {k: v["val"] for k, v in self.gs.stats.items()},
+                                    "resources": self.gs.resources.copy(),
+                                    "reality": self.gs.reality_stability,
+                                    "card_idx": self.gs.current_card_index
+                                }
+                    # Клик по автосохранению для загрузки
+                    if hasattr(self, 'auto_slot_rect') and self.auto_slot_rect.collidepoint(mouse_pos):
+                        if self.gs.auto_save is not None:
+                            data = self.gs.auto_save
+                            for k, v in data["stats"].items():
+                                self.gs.stats[k]["val"] = v
+                            self.gs.resources = data["resources"].copy()
+                            self.gs.reality_stability = data["reality"]
+                            self.gs.current_card_index = data["card_idx"]
+                            self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
+                            self.gs.state = 'PLAYING'
+
             elif event.type == pygame.KEYDOWN:
                 if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
@@ -83,8 +132,9 @@ class Game:
             target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else (self.gs.intro_texts[1] if self.gs.state == 'INTRO_2' else self.gs.intro_texts[2])
             if self.gs.current_char_index < len(target_text):
                 self.gs.text_timer += 1
-                if self.gs.text_timer >= self.gs.text_speed:
-                    self.gs.current_char_index += 2
+                # Замедлили скорость печатания текста (увеличили таймер до 4 кадров на символ)
+                if self.gs.text_timer >= 4:
+                    self.gs.current_char_index += 1
                     if self.gs.current_char_index > len(target_text):
                         self.gs.current_char_index = len(target_text)
                     self.gs.displayed_text = target_text[:self.gs.current_char_index]
@@ -93,7 +143,7 @@ class Game:
         elif self.gs.state == 'RESULT_WAIT':
             if self.gs.result_phase == 'DOTS':
                 self.gs.result_timer += 1
-                if self.gs.result_timer > 15:
+                if self.gs.result_timer > 20:
                     self.gs.displayed_text += "."
                     self.gs.result_timer = 0
                     if len(self.gs.displayed_text) >= 3:
@@ -103,8 +153,8 @@ class Game:
             elif self.gs.result_phase == 'TEXT':
                 if self.gs.current_char_index < len(self.gs.result_full_string):
                     self.gs.text_timer += 1
-                    if self.gs.text_timer >= self.gs.text_speed:
-                        self.gs.current_char_index += 2
+                    if self.gs.text_timer >= 4:
+                        self.gs.current_char_index += 1
                         if self.gs.current_char_index > len(self.gs.result_full_string):
                             self.gs.current_char_index = len(self.gs.result_full_string)
                         
@@ -127,19 +177,80 @@ class Game:
                 self.gs.game_over_alpha = min(255, self.gs.game_over_alpha + 2)
 
     def render(self):
-        self.screen.fill(COLOR_BG)
+        render_gradient_background(self.screen, self.tick_counter)
         
-        if self.gs.background_art:
-            self.screen.blit(self.gs.background_art, (0, 0))
-        else:
-            for i in range(0, SCREEN_HEIGHT, 40):
-                pygame.draw.line(self.screen, (12, 18, 14), (0, i), (SCREEN_WIDTH, i), 1)
+        if self.gs.background_art and self.gs.state not in ('MENU', 'LOAD_MENU'):
+            art_surf = self.gs.background_art.copy()
+            art_surf.set_alpha(100)
+            self.screen.blit(art_surf, (0, 0))
 
-        # Если не играем и не в геймовере — рисуем интерфейс игры под низом
-        if self.gs.state != 'GAME_OVER':
+        if self.gs.state == 'MENU':
+            title_surf = FONT_TITLE.render("ISOLATION-156", True, COLOR_TEXT)
+            self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 180))
+            
+            self.menu_btn_start = pygame.Rect(SCREEN_WIDTH // 2 - 150, 280, 300, 50)
+            self.menu_btn_saves = pygame.Rect(SCREEN_WIDTH // 2 - 150, 350, 300, 50)
+            self.menu_btn_exit = pygame.Rect(SCREEN_WIDTH // 2 - 150, 420, 300, 50)
+            
+            for rect, text in [(self.menu_btn_start, "ПРОДОЛЖИТЬ / ИГРАТЬ"), (self.menu_btn_saves, "СОХРАНЕНИЯ"), (self.menu_btn_exit, "ВЫЙТИ")]:
+                pygame.draw.rect(self.screen, (15, 25, 18), rect, border_radius=8)
+                pygame.draw.rect(self.screen, COLOR_ACCENT, rect, 2, border_radius=8)
+                t_surf = FONT_MAIN.render(text, True, COLOR_TEXT)
+                self.screen.blit(t_surf, (rect.centerx - t_surf.get_width() // 2, rect.centery - t_surf.get_height() // 2))
+
+        elif self.gs.state == 'LOAD_MENU':
+            title_surf = FONT_TITLE.render("ЯЧЕЙКИ СОХРАНЕНИЙ", True, COLOR_TEXT)
+            self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 60))
+            
+            # Автосохранение слева
+            auto_label = FONT_SMALL.render("АВТОСОХРАНЕНИЕ", True, COLOR_WARNING)
+            self.screen.blit(auto_label, (100, 130))
+            self.auto_slot_rect = pygame.Rect(100, 160, 260, 420)
+            pygame.draw.rect(self.screen, (12, 20, 15), self.auto_slot_rect, border_radius=8)
+            pygame.draw.rect(self.screen, COLOR_WARNING, self.auto_slot_rect, 2, border_radius=8)
+            if self.gs.auto_save is not None:
+                as_text = FONT_MAIN.render("Сохранено (Авто)", True, COLOR_ACCENT)
+                self.screen.blit(as_text, (self.auto_slot_rect.x + 20, self.auto_slot_rect.y + 30))
+            else:
+                as_text = FONT_MAIN.render("пусто", True, (100, 110, 105))
+                self.screen.blit(as_text, (self.auto_slot_rect.centerx - as_text.get_width() // 2, self.auto_slot_rect.centery))
+
+            # 6 ячеек справа в сетке 3x2
+            self.slot_rects = []
+            grid_x, grid_y = 400, 160
+            for i in range(6):
+                col = i % 3
+                row = i // 3
+                rx = grid_x + col * 280
+                ry = grid_y + row * 220
+                r = pygame.Rect(rx, ry, 260, 200)
+                self.slot_rects.append(r)
+                
+                pygame.draw.rect(self.screen, (12, 20, 15), r, border_radius=8)
+                pygame.draw.rect(self.screen, COLOR_ACCENT, r, 2, border_radius=8)
+                
+                slot_num = FONT_SMALL.render(f"Слот {i+1}", True, COLOR_TEXT)
+                self.screen.blit(slot_num, (r.x + 15, r.y + 15))
+                
+                if self.gs.save_slots[i] is not None:
+                    desc_surf = FONT_SMALL.render("Занято", True, COLOR_ACCENT)
+                    self.screen.blit(desc_surf, (r.centerx - desc_surf.get_width() // 2, r.centery))
+                else:
+                    empty_surf = FONT_MAIN.render("пусто", True, (100, 110, 105))
+                    self.screen.blit(empty_surf, (r.centerx - empty_surf.get_width() // 2, r.centery))
+
+            self.back_btn_rect = pygame.Rect(100, 610, 260, 45)
+            pygame.draw.rect(self.screen, (25, 15, 15), self.back_btn_rect, border_radius=8)
+            pygame.draw.rect(self.screen, COLOR_DANGER, self.back_btn_rect, 2, border_radius=8)
+            b_text = FONT_MAIN.render("НАЗАД В МЕНЮ", True, COLOR_TEXT)
+            self.screen.blit(b_text, (self.back_btn_rect.centerx - b_text.get_width() // 2, self.back_btn_rect.centery - b_text.get_height() // 2))
+
+        else:
+            # В процессе игры: стабильность реальности показывается только после прохождения интро
             render_top_hud(self.screen, self.gs.stats)
             render_side_economy(self.screen, self.gs.resources)
-            render_anomaly_radial(self.screen, self.gs.reality_stability)
+            if self.gs.state not in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
+                render_anomaly_radial(self.screen, self.gs.reality_stability)
 
         if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3', 'RESULT_WAIT'):
             dialog_width = SCREEN_WIDTH - 40
@@ -248,7 +359,6 @@ class Game:
                 bg_surf.blit(preview_surf, (12, 7))
                 self.screen.blit(bg_surf, (SCREEN_WIDTH - bg_surf.get_width() - 60, SCREEN_HEIGHT - 100))
 
-        # Анимация затухания и появления надписи ПОРАЖЕНИЕ
         if self.gs.state == 'GAME_OVER':
             fade_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
             fade_overlay.fill(COLOR_BLACK)
@@ -261,7 +371,7 @@ class Game:
                 defeat_rect = defeat_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
                 self.screen.blit(defeat_surf, defeat_rect)
 
-        if self.gs.intro_alpha > 0 and self.gs.state != 'GAME_OVER':
+        if self.gs.intro_alpha > 0 and self.gs.state not in ('GAME_OVER', 'MENU', 'LOAD_MENU'):
             fade_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
             fade_surf.fill(COLOR_BLACK)
             fade_surf.set_alpha(self.gs.intro_alpha)

@@ -108,3 +108,11 @@ def render_anomaly_radial(screen, stability_val):
     anom_surf.blit(val_surf, val_rect)
     
     screen.blit(anom_surf, (panel_x, panel_y))
+
+def render_gradient_background(screen, tick):
+    for y in range(SCREEN_HEIGHT):
+        factor = (math.sin(tick * 0.02 + y * 0.005) + 1) / 2
+        r = int(6 + factor * 8)
+        g = int(14 + factor * 16)
+        b = int(10 + factor * 10)
+        pygame.draw.line(screen, (r, g, b), (0, y), (SCREEN_WIDTH, y))

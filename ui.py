@@ -1,9 +1,10 @@
 import math
 import pygame
 from config import *
+from localization import get_text
 
-def render_top_hud(screen, stats):
-    panel_width = 980
+def render_top_hud(screen, stats, turns_counter, language):
+    panel_width = 1120
     panel_height = 65
     panel_x = 20
     panel_y = 15
@@ -15,12 +16,13 @@ def render_top_hud(screen, stats):
     x_offset = 15
     bar_width = 110
     bar_height = 10
+    stat_labels = get_text(language, "stats")
     
     for stat_name, data in stats.items():
         val = data["val"]
         color = data["color"]
         
-        lines = stat_name.split('\n')
+        lines = stat_labels[stat_name].split('\n')
         line_y = 8
         for line in lines:
             label_surf = FONT_HUD.render(line, True, color)
@@ -40,10 +42,16 @@ def render_top_hud(screen, stats):
         hud_surf.blit(val_surf, (bar_x + bar_width + 6, bar_y - 2))
         
         x_offset += 190
+
+    # Отрисовка счетчика ходов в правой части панели HUD
+    turn_label = FONT_HUD.render(get_text(language, "turn"), True, COLOR_WARNING)
+    hud_surf.blit(turn_label, (x_offset + 5, 8))
+    turn_val = FONT_TITLE.render(str(turns_counter), True, COLOR_TEXT)
+    hud_surf.blit(turn_val, (x_offset + 5, 26))
         
     screen.blit(hud_surf, (panel_x, panel_y))
 
-def render_side_economy(screen, resources):
+def render_side_economy(screen, resources, language):
     panel_width = 200
     panel_height = 110
     panel_x = SCREEN_WIDTH - 220
@@ -53,18 +61,19 @@ def render_side_economy(screen, resources):
     econ_surf.fill((15, 20, 16, 245))
     pygame.draw.rect(econ_surf, (150, 130, 50), econ_surf.get_rect(), 2, border_radius=8)
     
-    title_surf = FONT_SMALL.render("РЕСУРСЫ СЕКТОРА", True, COLOR_WARNING)
+    title_surf = FONT_SMALL.render(get_text(language, "resources"), True, COLOR_WARNING)
     econ_surf.blit(title_surf, (15, 12))
     
     y_pos = 42
+    resource_names = get_text(language, "resource_names")
     for res_name, res_val in resources.items():
-        res_surf = FONT_HUD.render(f"• {res_name}: {res_val}", True, COLOR_TEXT)
+        res_surf = FONT_HUD.render(f"• {resource_names[res_name]}: {res_val}", True, COLOR_TEXT)
         econ_surf.blit(res_surf, (15, y_pos))
         y_pos += 26
         
     screen.blit(econ_surf, (panel_x, panel_y))
 
-def render_anomaly_radial(screen, stability_val):
+def render_anomaly_radial(screen, stability_val, language):
     panel_width = 200
     panel_height = 150
     panel_x = SCREEN_WIDTH - 220
@@ -74,7 +83,7 @@ def render_anomaly_radial(screen, stability_val):
     anom_surf.fill((12, 20, 24, 245))
     pygame.draw.rect(anom_surf, (60, 150, 170), anom_surf.get_rect(), 2, border_radius=8)
     
-    title_surf = FONT_HUD.render("СТАБИЛЬНОСТЬ РЕАЛЬНОСТИ", True, COLOR_ANOMALY)
+    title_surf = FONT_HUD.render(get_text(language, "reality"), True, COLOR_ANOMALY)
     anom_surf.blit(title_surf, (10, 10))
     
     center_x = panel_width // 2

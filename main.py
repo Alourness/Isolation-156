@@ -132,6 +132,15 @@ class Game:
                 dialog_surface.blit(text_surf, (25, y_offset))
                 y_offset += 30
                 
+            if self.gs.state == 'RESULT_WAIT' and self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_text_full):
+                delta_x = 25
+                delta_y = y_offset + 5
+                for text, is_pos in self.gs.result_deltas:
+                    col = COLOR_ACCENT if is_pos else COLOR_DANGER
+                    delta_surf = FONT_MAIN.render(text, True, col)
+                    dialog_surface.blit(delta_surf, (delta_x, delta_y))
+                    delta_x += delta_surf.get_width() + 25
+                
             self.screen.blit(dialog_surface, (dialog_x, dialog_y))
             
             prompt_surf = FONT_SMALL.render("[ Нажмите SPACE, чтобы продолжить ]", True, COLOR_ACCENT)

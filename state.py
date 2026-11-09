@@ -20,7 +20,7 @@ class GameState:
             ),
             (
                 "Вы просыпаетесь за своим рабочим столом...\n"
-                "Лампа мерцает в такту уставшему гулу генераторов.\n"
+                "Лампа мерцает в такт уставшему гулу генераторов.\n"
                 "Секретарь кладет на стол первые донесения. Время принимать решения."
             )
         ]
@@ -33,6 +33,7 @@ class GameState:
         self.result_phase = None
         self.result_timer = 0
         self.pending_effects = None
+        self.result_deltas = []
         
         self.stats = {
             "Вера людей": {"val": 50, "color": (210, 175, 70)},
@@ -55,7 +56,7 @@ class GameState:
                 "desc": "Начальник нижнего технического цеха докладывает о критическом износе турбин. Без ремонта уровень удушья в жилых блоках возрастет.",
                 "left_preview": "ОТКАЗАТЬ: Сэкономить Материю, уронить Веру людей",
                 "right_preview": "ВЫДЕЛИТЬ ДЕТАЛИ: Потратить Материю, поднять Жизнепригодность",
-                "left_result": "Вы отказали техникам. Густой углекислотный туман медленно заполняет нижние уровни. Люди ропщут.",
+                "left_result": "Вы отказали техникам. Густой углекислотный туман медленно заполняет нижние уровни.",
                 "right_result": "Запасные детали доставлены в цех. Турбины взревели новыми оборотами, очищая воздух.",
                 "left_effects": {"faith": -15, "matter": 25, "hab": 0},
                 "right_effects": {"faith": 0, "matter": -30, "hab": 15}
@@ -66,7 +67,7 @@ class GameState:
                 "left_preview": "УЦЕПИТЬСЯ ЗА СТАБИЛЬНОСТЬ: Рискнуть энергией полей",
                 "right_preview": "ЗАБЕТОНИРОВАТЬ ОТСЕК: Замуровать аномалию вместе с частью людей",
                 "left_result": "Защитные контуры удержали разлом ценой чудовищного скачка энергопотребления.",
-                "right_result": "Автоматические бетононасосы залили отсек за считанные минуты. Крики стихли под метровым слоем цемента.",
+                "right_result": "Автоматические бетононасосы залили отсек за считанные минуты. Крики стихли.",
                 "left_effects": {"reality": 10, "energy": -25, "order": 0},
                 "right_effects": {"reality": -15, "order": 15, "faith": -10}
             }
@@ -104,6 +105,21 @@ class GameState:
             self.pending_effects = card["right_effects"]
             self.result_text_full = card["right_result"]
             
+        self.result_deltas = []
+        name_map = {
+            "faith": "Вера людей",
+            "hab": "Жизнепригодность",
+            "order": "Порядок",
+            "reality": "Стаб. реальности",
+            "matter": "Материя",
+            "energy": "Энергия"
+        }
+        for key, val in self.pending_effects.items():
+            if val != 0:
+                sign = "+" if val > 0 else ""
+                name = name_map.get(key, key)
+                self.result_deltas.append((f"{name}: {sign}{val}", val > 0))
+
         self.state = 'RESULT_WAIT'
         self.result_timer = 0
         self.result_phase = 'DOTS'

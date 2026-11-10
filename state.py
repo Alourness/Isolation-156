@@ -43,142 +43,107 @@ class GameState:
         self.resources = {"matter": 150, "energy": 100}
         
         self.faith_zero_counter = 0
+        self.hab_low_counter = 0
         self.revolution_active = False
         self.final_revolution_active = False
+        self.military_coup_active = False
+        self.chaos_crisis_active = False
         self.revolution_timer = 0
         self.turns_counter = 1
         
         self.save_slots = [None] * 6
         self.auto_save = None
         
-        # Расширенный пул из 21 карточки (5 базовых + 16 новых)
+        # Расширенный пул из 44 карточек (включая новые интриги, армию, политику и международные отношения)
         self.card_effects = [
             # 1. Угроза воздушного фильтра
-            {
-                "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0},
-                "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0},
-                "critical": False
-            },
+            {"left_effects": {"faith": -5}, "right_effects": {"matter": -15, "hab": 5}, "critical": False},
             # 2. Прорыв аномалии в секторе С (Реальность)
-            {
-                "left_effects": {"reality": 5, "energy": -10, "order": 0},
-                "right_effects": {"reality": -5, "order": 5, "faith": -5},
-                "critical": False
-            },
+            {"left_effects": {"reality": 5, "energy": -10}, "right_effects": {"reality": -5, "order": 5, "faith": -5}, "critical": False},
             # 3. Утечка радиоактивных отходов
-            {
-                "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0},
-                "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3},
-                "critical": False
-            },
+            {"left_effects": {"faith": -8, "hab": -5}, "right_effects": {"energy": -20, "hab": 3}, "critical": False},
             # 4. Контрабанда на черном рынке
-            {
-                "left_effects": {"faith": -5, "order": 5, "matter": 10},
-                "right_effects": {"faith": 8, "energy": -15, "order": 0},
-                "critical": False
-            },
+            {"left_effects": {"faith": -5, "order": 5, "matter": 10}, "right_effects": {"faith": 8, "energy": -15}, "critical": False},
             # 5. Затмение искусственного солнца
-            {
-                "left_effects": {"faith": 0, "hab": -6, "order": -8},
-                "right_effects": {"energy": -25, "hab": 2, "order": 3},
-                "critical": False
-            },
+            {"left_effects": {"hab": -6, "order": -8}, "right_effects": {"energy": -25, "hab": 2, "order": 3}, "critical": False},
             # 6. Бунт агрохимикатов
-            {
-                "left_effects": {"hab": -7, "order": -5},
-                "right_effects": {"matter": -15, "hab": 4},
-                "critical": False
-            },
+            {"left_effects": {"hab": -7, "order": -5}, "right_effects": {"matter": -15, "hab": 4}, "critical": False},
             # 7. Командирский раскол
-            {
-                "left_effects": {"army": 8, "political": -6},
-                "right_effects": {"army": -5, "political": 5},
-                "critical": False
-            },
+            {"left_effects": {"army": 8, "political": -6}, "right_effects": {"army": -5, "political": 5}, "critical": False},
             # 8. Перегрузка квантового узла
-            {
-                "left_effects": {"faith": -6},
-                "right_effects": {"energy": -20},
-                "critical": False
-            },
+            {"left_effects": {"faith": -6}, "right_effects": {"energy": -20}, "critical": False},
             # 9. Эпидемия апатии
-            {
-                "left_effects": {"order": 6, "faith": -7},
-                "right_effects": {"matter": -15, "energy": -10, "faith": 4},
-                "critical": True
-            },
+            {"left_effects": {"order": 6, "faith": -7}, "right_effects": {"matter": -15, "energy": -10, "faith": 4}, "critical": True},
             # 10. Трещина в несущей стене
-            {
-                "left_effects": {"order": -6},
-                "right_effects": {"matter": -25},
-                "critical": False
-            },
+            {"left_effects": {"order": -6}, "right_effects": {"matter": -25}, "critical": False},
             # 11. Прорыв персональных данных
-            {
-                "left_effects": {"political": -5, "faith": -5},
-                "right_effects": {"energy": -20},
-                "critical": False
-            },
+            {"left_effects": {"political": -5, "faith": -5}, "right_effects": {"energy": -20}, "critical": False},
             # 12. Сбой гравитационного контура
-            {
-                "left_effects": {"hab": -5, "order": -5},
-                "right_effects": {"energy": -15},
-                "critical": False
-            },
+            {"left_effects": {"hab": -5, "order": -5}, "right_effects": {"energy": -15}, "critical": False},
             # 13. Дезертирство на границе
-            {
-                "left_effects": {"order": 7, "faith": -8},
-                "right_effects": {"army": -6, "faith": 3},
-                "critical": False
-            },
+            {"left_effects": {"order": 7, "faith": -8}, "right_effects": {"army": -6, "faith": 3}, "critical": False},
             # 14. Аномальный туман (Реальность)
-            {
-                "left_effects": {"reality": -6, "faith": -5},
-                "right_effects": {"energy": -25, "reality": 3},
-                "critical": True
-            },
+            {"left_effects": {"reality": -6, "faith": -5}, "right_effects": {"energy": -25, "reality": 3}, "critical": True},
             # 15. Истощение водных фильтров
-            {
-                "left_effects": {"hab": -6, "faith": -4},
-                "right_effects": {"matter": -20},
-                "critical": False
-            },
+            {"left_effects": {"hab": -6, "faith": -4}, "right_effects": {"matter": -20}, "critical": False},
             # 16. Бунт автоматических дронов
-            {
-                "left_effects": {"army": 6, "order": -6},
-                "right_effects": {"energy": -20, "matter": -10},
-                "critical": False
-            },
+            {"left_effects": {"army": 6, "order": -6}, "right_effects": {"energy": -20, "matter": -10}, "critical": False},
             # 17. Приступ ихтиандровой лихорадки
-            {
-                "left_effects": {"faith": -6, "political": -5},
-                "right_effects": {"energy": -15, "matter": -15},
-                "critical": False
-            },
+            {"left_effects": {"faith": -6, "political": -5}, "right_effects": {"energy": -15, "matter": -15}, "critical": False},
             # 18. Конфликт силовиков и совета
-            {
-                "left_effects": {"army": -5, "political": 5},
-                "right_effects": {"political": -8, "army": 7},
-                "critical": False
-            },
+            {"left_effects": {"army": -5, "political": 5}, "right_effects": {"political": -8, "army": 7}, "critical": False},
             # 19. Пространственная скатка (Реальность)
-            {
-                "left_effects": {"matter": -10},
-                "right_effects": {"energy": -30, "reality": 4},
-                "critical": True
-            },
+            {"left_effects": {"matter": -10}, "right_effects": {"energy": -30, "reality": 4}, "critical": True},
             # 20. Забастовка инженеров
-            {
-                "left_effects": {"hab": -5, "faith": -5},
-                "right_effects": {"matter": -25},
-                "critical": False
-            },
+            {"left_effects": {"hab": -5, "faith": -5}, "right_effects": {"matter": -25}, "critical": False},
             # 21. Вспышка религиозного фанатизма
-            {
-                "left_effects": {"faith": -8, "order": 6},
-                "right_effects": {"energy": -15},
-                "critical": False
-            }
+            {"left_effects": {"faith": -8, "order": 6}, "right_effects": {"energy": -15}, "critical": False},
+            # 22. Сбой вентиляционных шлюзов
+            {"left_effects": {"order": -6}, "right_effects": {"energy": -15}, "critical": False},
+            # 23. Хищническая утилизация
+            {"left_effects": {"matter": 15, "faith": -10}, "right_effects": {"faith": 5}, "critical": False},
+            # 24. Кризис снабжения рудника
+            {"left_effects": {"hab": -7, "matter": 20}, "right_effects": {"faith": 3}, "critical": False},
+            # 25. Раскол в научном совете (Реальность)
+            {"left_effects": {"reality": 4, "political": -5}, "right_effects": {"political": 5, "reality": -4}, "critical": False},
+            # 26. Экстренный призрение беженцев
+            {"left_effects": {"energy": -20, "matter": -15, "faith": 8}, "right_effects": {"faith": -8, "order": -5}, "critical": True},
+            # 27. Коррупция на распределении
+            {"left_effects": {"matter": 15, "political": -5}, "right_effects": {"faith": 6, "order": 5}, "critical": False},
+            # 28. Необходимость усиления патрулей
+            {"left_effects": {"army": 6, "energy": -15}, "right_effects": {"order": -7}, "critical": False},
+            # 29. Повреждение системы опреснения
+            {"left_effects": {"energy": -20}, "right_effects": {"hab": -6, "faith": -5}, "critical": False},
+            # 30. Искусственный интеллект сектора
+            {"left_effects": {"hab": 6, "faith": -7}, "right_effects": {"energy": -15}, "critical": False},
+            # 31. Бунт на гидропонике
+            {"left_effects": {"order": 5, "faith": -6}, "right_effects": {"matter": -15, "energy": -10}, "critical": False},
+            # 32. Пространственный эхо-сдвиг (Реальность)
+            {"left_effects": {"energy": -25, "reality": 5}, "right_effects": {"reality": -7}, "critical": True},
+            # 33. Секретный чертеж инженеров
+            {"left_effects": {"matter": -20, "hab": 6}, "right_effects": {}, "critical": False},
+            # 34. Дефицит медикаментов
+            {"left_effects": {"matter": -20}, "right_effects": {"hab": -7, "faith": -5}, "critical": False},
+            # 35. Политический тупик в совете
+            {"left_effects": {"political": -7, "order": 6}, "right_effects": {"energy": -15}, "critical": False},
+            # 36. Угроза обрушения лифтовой шахты
+            {"left_effects": {"matter": -10, "order": -5}, "right_effects": {"matter": -20, "energy": -10}, "critical": False},
+            # 37. Вспышка кибернетического культа
+            {"left_effects": {"order": 6, "faith": -6}, "right_effects": {"energy": -15}, "critical": False},
+            # 38. Кризис чести гарнизона
+            {"left_effects": {"matter": -25}, "right_effects": {"army": -8}, "critical": False},
+            # 39. Аномальный акустический гул (Реальность)
+            {"left_effects": {"reality": -5, "hab": -5}, "right_effects": {"energy": -20}, "critical": False},
+            # 40. Итоговая инспекция сектора
+            {"left_effects": {"matter": -15, "energy": -15}, "right_effects": {"energy": -30}, "critical": True},
+            # 41. Теневой ультиматум генералов
+            {"left_effects": {"army": 8, "political": -8}, "right_effects": {"political": 6, "army": -6}, "critical": False},
+            # 42. Тайный пакт с соседним бункером
+            {"left_effects": {"matter": 25, "political": -7}, "right_effects": {"faith": 5, "energy": -15}, "critical": False},
+            # 43. Парламентский кризис доверия
+            {"left_effects": {"political": -10, "order": -6}, "right_effects": {"matter": -20, "political": 7}, "critical": True},
+            # 44. Заговор министра безопасности
+            {"left_effects": {"order": 8, "political": -8}, "right_effects": {"army": 6, "order": -5}, "critical": True}
         ]
         
         self.revolution_effects = {
@@ -190,6 +155,30 @@ class GameState:
         self.final_revolution_effects = {
             "left_effects": {"faith": -100, "order": -100},
             "right_effects": {"faith": -100, "order": -100},
+            "critical": True
+        }
+
+        self.military_coup_card = {
+            "title": "ВОЕННЫЙ ПЕРЕВОРОТ",
+            "desc": "Армия под руководством генералов посчитала вашу власть избыточно мягкой. Колонны бронетехники занимают правительственные здания!",
+            "left_preview": "КАПИТУЛИРОВАТЬ: Передать власть хунте.",
+            "right_preview": "ПОПЫТАТЬСЯ ОТБИТЬСЯ: Рискнуть остатками сил.",
+            "left_result": "Генералы арестовали вас прямо в кабинете. Военная диктатура установлена.",
+            "right_result": "Верные вам отряды были разгромлены в уличных боях.",
+            "left_effects": {"army": -100, "political": -100},
+            "right_effects": {"army": -100, "political": -100},
+            "critical": True
+        }
+
+        self.chaos_crisis_card = {
+            "title": "КАТАСТРОФА ВЫЖИВАНИЯ: МАССОВЫЙ МОР",
+            "desc": "Из-за критически низкой жизнедеятельности в течение недели люди начали массово умирать. Бунтующие толпы гроно сносят заграждения. Требуются колоссальные затраты (40 Энергии и 50 Материи) для восстановления порядка!",
+            "left_preview": "БРОСИТЬ НА ПРОИЗВОЛ: Полный распад сектора.",
+            "right_preview": "ЭКСТРЕННАЯ МОБИЛИЗАЦИЯ: Потратить 40 Энергии и 50 Материи.",
+            "left_result": "Сектор погрузился в перманентный хаос и вымер.",
+            "right_result": "Ценой колоссальных затрат и чрезвычайных мер вам удалось остановить эпидемию и хаос.",
+            "left_effects": {"hab": -100, "order": -100},
+            "right_effects": {"energy": -40, "matter": -50, "hab": 25, "order": 20},
             "critical": True
         }
         
@@ -241,8 +230,11 @@ class GameState:
             self.current_card_index = 0
             self.turns_counter = 1
             self.faith_zero_counter = 0
+            self.hab_low_counter = 0
             self.revolution_active = False
             self.final_revolution_active = False
+            self.military_coup_active = False
+            self.chaos_crisis_active = False
             self.revolution_timer = 0
         else:
             for key, stat in self.stats.items():
@@ -252,8 +244,11 @@ class GameState:
             self.current_card_index = data.get("card_idx", 0) % len(self.cards_pool)
             self.turns_counter = data.get("turns", 1)
             self.faith_zero_counter = data.get("faith_zero_counter", 0)
+            self.hab_low_counter = data.get("hab_low_counter", 0)
             self.revolution_active = data.get("revolution_active", False)
             self.final_revolution_active = data.get("final_revolution_active", False)
+            self.military_coup_active = data.get("military_coup_active", False)
+            self.chaos_crisis_active = data.get("chaos_crisis_active", False)
             self.revolution_timer = data.get("revolution_timer", 0)
 
         self.card_data = self.cards_pool[self.current_card_index]
@@ -301,25 +296,24 @@ class GameState:
         return None
 
     def trigger_choice(self, direction):
-        if self.revolution_active and self.final_revolution_active:
-            card = self.final_revolution_card
+        if not self.can_afford_choice(direction):
+            return False
+
+        card = self.get_active_card()
+        if (self.revolution_active and self.final_revolution_active) or self.military_coup_active or self.chaos_crisis_active:
             self.is_defeat = True
-        elif self.revolution_active:
-            card = self.revolution_card
-        else:
-            card = self.cards_pool[self.current_card_index]
             
         if direction == "LEFT":
             self.displayed_text = ""
             raw_effects = card["left_effects"]
             self.result_text_full = card["left_result"]
-            if self.revolution_active and self.final_revolution_active:
+            if (self.revolution_active and self.final_revolution_active) or self.military_coup_active or self.chaos_crisis_active:
                 self.is_defeat = True
         else:
             self.displayed_text = ""
             raw_effects = card["right_effects"]
             self.result_text_full = card["right_result"]
-            if self.revolution_active and self.final_revolution_active:
+            if (self.revolution_active and self.final_revolution_active) or self.military_coup_active or self.chaos_crisis_active:
                 self.is_defeat = True
 
         filtered_effects = {}
@@ -362,6 +356,31 @@ class GameState:
         self.result_timer = 0
         self.result_phase = 'DOTS'
         self.current_char_index = 0
+        return True
+
+    def get_active_card(self):
+        if self.chaos_crisis_active:
+            return self.chaos_crisis_card
+        if self.military_coup_active:
+            return self.military_coup_card
+        if self.revolution_active and self.final_revolution_active:
+            return self.final_revolution_card
+        if self.revolution_active:
+            return self.revolution_card
+        return self.card_data
+
+    def can_afford_choice(self, direction):
+        if direction not in ("LEFT", "RIGHT"):
+            raise ValueError(f"Unknown choice direction: {direction}")
+
+        card = self.get_active_card()
+        choice_key = "left_effects" if direction == "LEFT" else "right_effects"
+        effects = card[choice_key]
+        return all(
+            self.resources[resource] >= -change
+            for resource, change in effects.items()
+            if resource in self.resources and change < 0
+        )
 
     def apply_pending_effects(self):
         effects = self.pending_effects
@@ -388,37 +407,66 @@ class GameState:
             
         self.turns_counter += 1
 
-        if self.revolution_active:
+        # Механика регулярных поставок: энергия каждые 8 дней, деньги/материя каждые 10 дней по 30
+        if self.turns_counter % 8 == 0:
+            self.resources["energy"] += 25
+        if self.turns_counter % 10 == 0:
+            self.resources["matter"] += 30
+
+        # Сброс триггеров критических кризисов при их успешном преодолении
+        if self.chaos_crisis_active:
+            self.chaos_crisis_active = False
+            self.hab_low_counter = 0
+        elif self.military_coup_active:
+            self.military_coup_active = False
+        elif self.revolution_active:
             self.revolution_active = False
             self.final_revolution_active = False
             self.revolution_timer = 9
             self.faith_zero_counter = 0
         else:
-            if self.revolution_timer > 0:
-                self.faith_zero_counter = 0
-                if self.stats["faith"]["val"] == 0:
-                    self.revolution_timer -= 1
-                    if self.revolution_timer == 0:
-                        self.revolution_active = True
-                        self.final_revolution_active = True
-                else:
-                    self.revolution_timer = 9
+            # Проверка условия жизнедеятельности (0-10 в течение 7 ивентов/ходов)
+            hab_val = self.stats["habitability"]["val"]
+            if 0 <= hab_val <= 10:
+                self.hab_low_counter += 1
+                if self.hab_low_counter >= 7:
+                    self.chaos_crisis_active = True
             else:
-                if self.stats["faith"]["val"] == 0:
-                    self.faith_zero_counter += 1
-                    if self.faith_zero_counter >= 3:
-                        self.revolution_active = True
-                        self.final_revolution_active = False
-                else:
+                self.hab_low_counter = 0
+
+            # Проверка шанса военного переворота при армии > 90 (+15% с каждым днем/ходом)
+            army_val = self.stats["army"]["val"]
+            if army_val > 90:
+                # Базовый шанс при превышении 90 составляет 15%, с каждым ходом растет еще на 15%
+                coup_chance = 15 + (army_val - 90) * 3  # масштабирование для азарта
+                # Простейшая детерминированная/псевдослучайная проверка через turns_counter или хэш
+                import random
+                if random.randint(1, 100) <= coup_chance:
+                    self.military_coup_active = True
+
+            if not self.chaos_crisis_active and not self.military_coup_active:
+                if self.revolution_timer > 0:
                     self.faith_zero_counter = 0
+                    if self.stats["faith"]["val"] == 0:
+                        self.revolution_timer -= 1
+                        if self.revolution_timer == 0:
+                            self.revolution_active = True
+                            self.final_revolution_active = True
+                    else:
+                        self.revolution_timer = 9
+                else:
+                    if self.stats["faith"]["val"] == 0:
+                        self.faith_zero_counter += 1
+                        if self.faith_zero_counter >= 3:
+                            self.revolution_active = True
+                            self.final_revolution_active = False
+                    else:
+                        self.faith_zero_counter = 0
 
-            if not self.revolution_active:
-                self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
+                if not self.revolution_active:
+                    self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
 
-        self.card_data = (
-            self.final_revolution_card if (self.revolution_active and self.final_revolution_active)
-            else (self.revolution_card if self.revolution_active else self.cards_pool[self.current_card_index])
-        )
+        self.card_data = self.get_active_card()
 
         if self.turns_counter % 5 == 0:
             self.auto_save = {
@@ -428,8 +476,11 @@ class GameState:
                 "card_idx": self.current_card_index,
                 "turns": self.turns_counter,
                 "faith_zero_counter": self.faith_zero_counter,
+                "hab_low_counter": self.hab_low_counter,
                 "revolution_active": self.revolution_active,
                 "final_revolution_active": self.final_revolution_active,
+                "military_coup_active": self.military_coup_active,
+                "chaos_crisis_active": self.chaos_crisis_active,
                 "revolution_timer": self.revolution_timer,
             }
             

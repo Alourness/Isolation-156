@@ -31,6 +31,18 @@ def render_wrapped_text(surface, text, font, color, position, max_width, line_he
     return y
 
 
+def render_unaffordable_glow(screen, direction):
+    glow_size = 240
+    glow = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
+    center = (0, glow_size) if direction == "LEFT" else (glow_size, glow_size)
+
+    for radius, alpha in ((150, 5), (125, 7), (100, 10), (75, 14), (50, 19), (25, 24)):
+        pygame.draw.circle(glow, (*COLOR_DANGER, alpha), center, radius)
+
+    x = 0 if direction == "LEFT" else SCREEN_WIDTH - glow_size
+    screen.blit(glow, (x, SCREEN_HEIGHT - glow_size))
+
+
 def render_top_hud(screen, stats, turns_counter, language):
     panel_width = 1120
     panel_height = 65

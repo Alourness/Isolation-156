@@ -8,6 +8,7 @@ from ui import (
     render_anomaly_radial,
     render_gradient_background,
     render_wrapped_text,
+    render_unaffordable_glow,
 )
 from localization import LANGUAGES, get_text, load_language, save_language
 
@@ -47,11 +48,7 @@ class Game:
         self.gs.text_fast = False
 
     def get_active_card(self):
-        if self.gs.revolution_active and self.gs.final_revolution_active:
-            return self.gs.final_revolution_card
-        if self.gs.revolution_active:
-            return self.gs.revolution_card
-        return self.gs.card_data
+        return self.gs.get_active_card()
 
     def save_game_state(self):
         return {
@@ -132,15 +129,26 @@ class Game:
                 if self.gs.state == 'PLAYING' and self.gs.is_dragging:
                     self.gs.is_dragging = False
                     if self.gs.card_current_x < self.gs.card_rect.x - 120:
-                        self.gs.trigger_choice("LEFT")
+                        if self.gs.can_afford_choice("LEFT"):
+                            self.gs.trigger_choice("LEFT")
+                        else:
+                            self.gs.card_current_x = self.gs.card_rect.x
                     elif self.gs.card_current_x > self.gs.card_rect.x + 120:
-                        self.gs.trigger_choice("RIGHT")
+                        if self.gs.can_afford_choice("RIGHT"):
+                            self.gs.trigger_choice("RIGHT")
+                        else:
+                            self.gs.card_current_x = self.gs.card_rect.x
                     else:
                         self.gs.card_current_x = self.gs.card_rect.x
 
             elif event.type == pygame.MOUSEMOTION:
                 if self.gs.state == 'PLAYING' and self.gs.is_dragging:
-                    self.gs.card_current_x = event.pos[0] - self.gs.card_drag_offset_x
+                    target_x = event.pos[0] - self.gs.card_drag_offset_x
+                    if not self.gs.can_afford_choice("LEFT"):
+                        target_x = max(target_x, self.gs.card_rect.x - 120)
+                    if not self.gs.can_afford_choice("RIGHT"):
+                        target_x = min(target_x, self.gs.card_rect.x + 120)
+                    self.gs.card_current_x = target_x
 
             elif event.type == pygame.KEYDOWN:
                 if event.key != pygame.K_SPACE:
@@ -433,6 +441,10 @@ class Game:
             self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
             
         elif self.gs.state == 'PLAYING':
+            for direction in ("LEFT", "RIGHT"):
+                if not self.gs.can_afford_choice(direction):
+                    render_unaffordable_glow(self.screen, direction)
+
             card_draw_rect = pygame.Rect(self.gs.card_current_x, self.gs.card_rect.y, self.gs.card_rect.width, self.gs.card_rect.height)
             if self.gs.card_animation_active:
                 card_draw_rect.y = self.gs.card_anim_y

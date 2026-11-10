@@ -18,6 +18,67 @@ class Game:
         self.clock = pygame.time.Clock()
         self.gs = GameState(load_language())
         self.tick_counter = 0
+        self.last_dialog_space_ms = None
+
+    def is_double_space_press(self):
+        now = pygame.time.get_ticks()
+        previous = self.last_dialog_space_ms
+        self.last_dialog_space_ms = now
+        return previous is not None and 0 <= now - previous <= 350
+
+    def reveal_dialog_text(self):
+        if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
+            intro_index = int(self.gs.state[-1]) - 1
+            text = self.gs.intro_texts[intro_index]
+            self.gs.current_char_index = len(text)
+            self.gs.displayed_text = text
+        elif self.gs.state == 'RESULT_WAIT':
+            if self.gs.result_phase == 'DOTS':
+                self.gs.result_phase = 'TEXT'
+            self.gs.current_char_index = len(self.gs.result_full_string)
+            self.gs.current_rendered_chunks = self.gs.result_chunks.copy()
+        self.gs.text_timer = 0
+        self.gs.text_fast = False
+
+    def reveal_card_text(self):
+        active_card = self.get_active_card()
+        self.gs.card_text_char_index = len(active_card["title"]) + len(active_card["desc"])
+        self.gs.card_text_timer = 0
+        self.gs.text_fast = False
+
+    def get_active_card(self):
+        if self.gs.revolution_active and self.gs.final_revolution_active:
+            return self.gs.final_revolution_card
+        if self.gs.revolution_active:
+            return self.gs.revolution_card
+        return self.gs.card_data
+
+    def save_game_state(self):
+        return {
+            "stats": {key: value["val"] for key, value in self.gs.stats.items()},
+            "resources": self.gs.resources.copy(),
+            "reality": self.gs.reality_stability,
+            "card_idx": self.gs.current_card_index,
+            "turns": self.gs.turns_counter,
+            "faith_zero_counter": self.gs.faith_zero_counter,
+            "revolution_active": self.gs.revolution_active,
+            "final_revolution_active": self.gs.final_revolution_active,
+            "revolution_timer": self.gs.revolution_timer,
+        }
+
+    def load_game_state(self, data):
+        for key, stat in self.gs.stats.items():
+            stat["val"] = data["stats"].get(key, 50)
+        self.gs.resources = data["resources"].copy()
+        self.gs.reality_stability = data.get("reality", 65)
+        self.gs.current_card_index = data["card_idx"] % len(self.gs.cards_pool)
+        self.gs.turns_counter = data.get("turns", 1)
+        self.gs.faith_zero_counter = data.get("faith_zero_counter", 0)
+        self.gs.revolution_active = data.get("revolution_active", False)
+        self.gs.final_revolution_active = data.get("final_revolution_active", False)
+        self.gs.revolution_timer = data.get("revolution_timer", 0)
+        self.gs.card_data = self.get_active_card()
+        self.gs.start_card_appearance()
 
     def run(self):
         while True:
@@ -54,34 +115,12 @@ class Game:
                     for i, rect in enumerate(self.slot_rects):
                         if rect.collidepoint(mouse_pos):
                             if self.gs.save_slots[i] is not None:
-                                data = self.gs.save_slots[i]
-                                for k, v in data["stats"].items():
-                                    self.gs.stats[k]["val"] = v
-                                self.gs.resources = data["resources"].copy()
-                                self.gs.reality_stability = data["reality"]
-                                self.gs.current_card_index = data["card_idx"]
-                                self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
-                                self.gs.turns_counter = data.get("turns", 1)
-                                self.gs.start_card_appearance()
+                                self.load_game_state(self.gs.save_slots[i])
                             else:
-                                self.gs.save_slots[i] = {
-                                    "stats": {k: v["val"] for k, v in self.gs.stats.items()},
-                                    "resources": self.gs.resources.copy(),
-                                    "reality": self.gs.reality_stability,
-                                    "card_idx": self.gs.current_card_index,
-                                    "turns": self.gs.turns_counter
-                                }
+                                self.gs.save_slots[i] = self.save_game_state()
                     if hasattr(self, 'auto_slot_rect') and self.auto_slot_rect.collidepoint(mouse_pos):
                         if self.gs.auto_save is not None:
-                            data = self.gs.auto_save
-                            for k, v in data["stats"].items():
-                                self.gs.stats[k]["val"] = v
-                            self.gs.resources = data["resources"].copy()
-                            self.gs.reality_stability = data["reality"]
-                            self.gs.current_card_index = data["card_idx"]
-                            self.gs.card_data = self.gs.cards_pool[self.gs.current_card_index]
-                            self.gs.turns_counter = data.get("turns", 1)
-                            self.gs.start_card_appearance()
+                            self.load_game_state(self.gs.auto_save)
                 elif self.gs.state == 'PLAYING':
                     if not self.gs.card_animation_active and self.gs.card_rect.collidepoint(
                         (event.pos[0] - (self.gs.card_current_x - self.gs.card_rect.x), event.pos[1])
@@ -104,8 +143,16 @@ class Game:
                     self.gs.card_current_x = event.pos[0] - self.gs.card_drag_offset_x
 
             elif event.type == pygame.KEYDOWN:
+                if event.key != pygame.K_SPACE:
+                    self.last_dialog_space_ms = None
                 if self.gs.state in ('INTRO_1', 'INTRO_2', 'INTRO_3'):
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                        if event.key == pygame.K_SPACE and not getattr(event, 'repeat', False):
+                            if self.is_double_space_press():
+                                intro_index = int(self.gs.state[-1]) - 1
+                                if self.gs.current_char_index < len(self.gs.intro_texts[intro_index]):
+                                    self.reveal_dialog_text()
+                                    continue
                         target_text = self.gs.intro_texts[0] if self.gs.state == 'INTRO_1' else (self.gs.intro_texts[1] if self.gs.state == 'INTRO_2' else self.gs.intro_texts[2])
                         if self.gs.current_char_index < len(target_text):
                             self.gs.text_fast = True
@@ -115,19 +162,30 @@ class Game:
                                 self.gs.current_char_index = 0
                                 self.gs.displayed_text = ""
                                 self.gs.text_fast = False
+                                self.last_dialog_space_ms = None
                             elif self.gs.state == 'INTRO_2':
                                 self.gs.state = 'INTRO_3'
                                 self.gs.current_char_index = 0
                                 self.gs.displayed_text = ""
                                 self.gs.text_fast = False
+                                self.last_dialog_space_ms = None
                             else:
+                                self.last_dialog_space_ms = None
                                 self.gs.start_card_appearance()
                                 
                 elif self.gs.state == 'RESULT_WAIT':
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                        if event.key == pygame.K_SPACE and not getattr(event, 'repeat', False):
+                            if self.is_double_space_press() and (
+                                self.gs.result_phase == 'DOTS'
+                                or self.gs.current_char_index < len(self.gs.result_full_string)
+                            ):
+                                self.reveal_dialog_text()
+                                continue
                         if self.gs.result_phase == 'TEXT' and self.gs.current_char_index < len(self.gs.result_full_string):
                             self.gs.text_fast = True
                         elif self.gs.result_phase == 'TEXT' and self.gs.current_char_index >= len(self.gs.result_full_string):
+                            self.last_dialog_space_ms = None
                             self.gs.apply_pending_effects()
                         elif self.gs.result_phase == 'DOTS':
                             self.gs.result_phase = 'TEXT'
@@ -136,6 +194,13 @@ class Game:
                             self.gs.text_fast = False
                 elif self.gs.state == 'PLAYING' and self.gs.card_animation_active:
                     if event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                        if event.key == pygame.K_SPACE and not getattr(event, 'repeat', False):
+                            if self.is_double_space_press():
+                                active_card = self.get_active_card()
+                                total_chars = len(active_card["title"]) + len(active_card["desc"])
+                                if self.gs.card_text_char_index < total_chars:
+                                    self.reveal_card_text()
+                                    continue
                         self.gs.text_fast = True
 
     def update(self, delta_ms=1000 / FPS):
@@ -221,7 +286,7 @@ class Game:
             if self.gs.card_animation_active:
                 self.gs.card_anim_y = max(self.gs.card_rect.y, self.gs.card_anim_y - 18)
                 active_card = self.gs.final_revolution_card if (
-                    self.gs.revolution_active and self.gs.revolution_timer <= 0
+                    self.gs.revolution_active and self.gs.final_revolution_active
                 ) else (
                     self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data
                 )
@@ -375,7 +440,7 @@ class Game:
             card_surf = pygame.Surface((card_draw_rect.width, card_draw_rect.height), pygame.SRCALPHA)
             card_bg_color = (COLOR_CARD_BG[0], COLOR_CARD_BG[1], COLOR_CARD_BG[2], self.gs.card_fade_alpha)
             
-            active_card = self.gs.final_revolution_card if (self.gs.revolution_active and self.gs.revolution_timer <= 0) else (self.gs.revolution_card if self.gs.revolution_active else self.gs.card_data)
+            active_card = self.get_active_card()
             border_color = COLOR_DANGER if active_card.get("critical", False) else (90, 110, 95)
             
             pygame.draw.rect(card_surf, card_bg_color, card_surf.get_rect(), border_radius=12)

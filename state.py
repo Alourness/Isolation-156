@@ -44,37 +44,139 @@ class GameState:
         
         self.faith_zero_counter = 0
         self.revolution_active = False
+        self.final_revolution_active = False
         self.revolution_timer = 0
         self.turns_counter = 1
         
         self.save_slots = [None] * 6
         self.auto_save = None
         
-        # Стабильность реальности меняется только там, где это логически оправданно (аномалии)
+        # Расширенный пул из 21 карточки (5 базовых + 16 новых)
         self.card_effects = [
+            # 1. Угроза воздушного фильтра
             {
                 "left_effects": {"faith": -5, "matter": 0, "hab": 0, "order": 0},
                 "right_effects": {"faith": 0, "matter": -15, "hab": 5, "order": 0},
                 "critical": False
             },
+            # 2. Прорыв аномалии в секторе С (Реальность)
             {
                 "left_effects": {"reality": 5, "energy": -10, "order": 0},
                 "right_effects": {"reality": -5, "order": 5, "faith": -5},
                 "critical": False
             },
+            # 3. Утечка радиоактивных отходов
             {
                 "left_effects": {"faith": -8, "matter": 0, "hab": -5, "order": 0},
                 "right_effects": {"faith": 0, "matter": 0, "energy": -20, "hab": 3},
                 "critical": False
             },
+            # 4. Контрабанда на черном рынке
             {
                 "left_effects": {"faith": -5, "order": 5, "matter": 10},
                 "right_effects": {"faith": 8, "energy": -15, "order": 0},
                 "critical": False
             },
+            # 5. Затмение искусственного солнца
             {
                 "left_effects": {"faith": 0, "hab": -6, "order": -8},
                 "right_effects": {"energy": -25, "hab": 2, "order": 3},
+                "critical": False
+            },
+            # 6. Бунт агрохимикатов
+            {
+                "left_effects": {"hab": -7, "order": -5},
+                "right_effects": {"matter": -15, "hab": 4},
+                "critical": False
+            },
+            # 7. Командирский раскол
+            {
+                "left_effects": {"army": 8, "political": -6},
+                "right_effects": {"army": -5, "political": 5},
+                "critical": False
+            },
+            # 8. Перегрузка квантового узла
+            {
+                "left_effects": {"faith": -6},
+                "right_effects": {"energy": -20},
+                "critical": False
+            },
+            # 9. Эпидемия апатии
+            {
+                "left_effects": {"order": 6, "faith": -7},
+                "right_effects": {"matter": -15, "energy": -10, "faith": 4},
+                "critical": True
+            },
+            # 10. Трещина в несущей стене
+            {
+                "left_effects": {"order": -6},
+                "right_effects": {"matter": -25},
+                "critical": False
+            },
+            # 11. Прорыв персональных данных
+            {
+                "left_effects": {"political": -5, "faith": -5},
+                "right_effects": {"energy": -20},
+                "critical": False
+            },
+            # 12. Сбой гравитационного контура
+            {
+                "left_effects": {"hab": -5, "order": -5},
+                "right_effects": {"energy": -15},
+                "critical": False
+            },
+            # 13. Дезертирство на границе
+            {
+                "left_effects": {"order": 7, "faith": -8},
+                "right_effects": {"army": -6, "faith": 3},
+                "critical": False
+            },
+            # 14. Аномальный туман (Реальность)
+            {
+                "left_effects": {"reality": -6, "faith": -5},
+                "right_effects": {"energy": -25, "reality": 3},
+                "critical": True
+            },
+            # 15. Истощение водных фильтров
+            {
+                "left_effects": {"hab": -6, "faith": -4},
+                "right_effects": {"matter": -20},
+                "critical": False
+            },
+            # 16. Бунт автоматических дронов
+            {
+                "left_effects": {"army": 6, "order": -6},
+                "right_effects": {"energy": -20, "matter": -10},
+                "critical": False
+            },
+            # 17. Приступ ихтиандровой лихорадки
+            {
+                "left_effects": {"faith": -6, "political": -5},
+                "right_effects": {"energy": -15, "matter": -15},
+                "critical": False
+            },
+            # 18. Конфликт силовиков и совета
+            {
+                "left_effects": {"army": -5, "political": 5},
+                "right_effects": {"political": -8, "army": 7},
+                "critical": False
+            },
+            # 19. Пространственная скатка (Реальность)
+            {
+                "left_effects": {"matter": -10},
+                "right_effects": {"energy": -30, "reality": 4},
+                "critical": True
+            },
+            # 20. Забастовка инженеров
+            {
+                "left_effects": {"hab": -5, "faith": -5},
+                "right_effects": {"matter": -25},
+                "critical": False
+            },
+            # 21. Вспышка религиозного фанатизма
+            {
+                "left_effects": {"faith": -8, "order": 6},
+                "right_effects": {"energy": -15},
                 "critical": False
             }
         ]
@@ -140,6 +242,7 @@ class GameState:
             self.turns_counter = 1
             self.faith_zero_counter = 0
             self.revolution_active = False
+            self.final_revolution_active = False
             self.revolution_timer = 0
         else:
             for key, stat in self.stats.items():
@@ -150,6 +253,7 @@ class GameState:
             self.turns_counter = data.get("turns", 1)
             self.faith_zero_counter = data.get("faith_zero_counter", 0)
             self.revolution_active = data.get("revolution_active", False)
+            self.final_revolution_active = data.get("final_revolution_active", False)
             self.revolution_timer = data.get("revolution_timer", 0)
 
         self.card_data = self.cards_pool[self.current_card_index]
@@ -173,7 +277,7 @@ class GameState:
         self.intro_texts = get_text(language, "intro")
         localized = TEXT[language]
         if len(localized["cards"]) != len(self.card_effects):
-            raise ValueError(f"Card translations are incomplete for language: {language}")
+            raise ValueError(f"Card translations ({len(localized['cards'])}) mismatch card effects ({len(self.card_effects)}) for language: {language}")
         self.cards_pool = [
             {**card_text, **effects}
             for card_text, effects in zip(localized["cards"], self.card_effects)
@@ -197,7 +301,7 @@ class GameState:
         return None
 
     def trigger_choice(self, direction):
-        if self.revolution_active and self.revolution_timer <= 0:
+        if self.revolution_active and self.final_revolution_active:
             card = self.final_revolution_card
             self.is_defeat = True
         elif self.revolution_active:
@@ -209,13 +313,13 @@ class GameState:
             self.displayed_text = ""
             raw_effects = card["left_effects"]
             self.result_text_full = card["left_result"]
-            if self.revolution_active:
+            if self.revolution_active and self.final_revolution_active:
                 self.is_defeat = True
         else:
             self.displayed_text = ""
             raw_effects = card["right_effects"]
             self.result_text_full = card["right_result"]
-            if self.revolution_active and self.revolution_timer <= 0:
+            if self.revolution_active and self.final_revolution_active:
                 self.is_defeat = True
 
         filtered_effects = {}
@@ -269,6 +373,8 @@ class GameState:
             self.stats["order"]["val"] = max(0, min(100, self.stats["order"]["val"] + effects["order"]))
         if "army" in effects:
             self.stats["army"]["val"] = max(0, min(100, self.stats["army"]["val"] + effects["army"]))
+        if "political" in effects:
+            self.stats["political"]["val"] = max(0, min(100, self.stats["political"]["val"] + effects["political"]))
         if "reality" in effects:
             self.reality_stability = max(0, min(100, self.reality_stability + effects["reality"]))
         if "matter" in effects:
@@ -281,30 +387,39 @@ class GameState:
             return
             
         self.turns_counter += 1
-        if self.revolution_active:
-            if self.revolution_timer <= 0:
-                self.start_game_over()
-                return
-            else:
-                self.revolution_active = False
-                self.revolution_timer = 9
-                self.faith_zero_counter = 0
-        else:
-            if self.stats["faith"]["val"] == 0:
-                self.faith_zero_counter += 1
-                if self.faith_zero_counter >= 3:
-                    if self.revolution_timer <= 0:
-                        self.revolution_active = True
-            else:
-                self.faith_zero_counter = 0
-                if self.revolution_timer > 0:
-                    self.revolution_timer -= 1
-                    if self.revolution_timer == 0 and self.stats["faith"]["val"] == 0:
-                        self.revolution_active = True
-                    
-            self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
 
-        self.card_data = self.cards_pool[self.current_card_index]
+        if self.revolution_active:
+            self.revolution_active = False
+            self.final_revolution_active = False
+            self.revolution_timer = 9
+            self.faith_zero_counter = 0
+        else:
+            if self.revolution_timer > 0:
+                self.faith_zero_counter = 0
+                if self.stats["faith"]["val"] == 0:
+                    self.revolution_timer -= 1
+                    if self.revolution_timer == 0:
+                        self.revolution_active = True
+                        self.final_revolution_active = True
+                else:
+                    self.revolution_timer = 9
+            else:
+                if self.stats["faith"]["val"] == 0:
+                    self.faith_zero_counter += 1
+                    if self.faith_zero_counter >= 3:
+                        self.revolution_active = True
+                        self.final_revolution_active = False
+                else:
+                    self.faith_zero_counter = 0
+
+            if not self.revolution_active:
+                self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
+
+        self.card_data = (
+            self.final_revolution_card if (self.revolution_active and self.final_revolution_active)
+            else (self.revolution_card if self.revolution_active else self.cards_pool[self.current_card_index])
+        )
+
         if self.turns_counter % 5 == 0:
             self.auto_save = {
                 "stats": {k: v["val"] for k, v in self.stats.items()},
@@ -314,6 +429,7 @@ class GameState:
                 "turns": self.turns_counter,
                 "faith_zero_counter": self.faith_zero_counter,
                 "revolution_active": self.revolution_active,
+                "final_revolution_active": self.final_revolution_active,
                 "revolution_timer": self.revolution_timer,
             }
             

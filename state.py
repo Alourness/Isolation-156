@@ -1,7 +1,13 @@
 import os
+import random
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_ACCENT, COLOR_DANGER
 from localization import LANGUAGES, TEXT, get_text
+
+
+AUTOSAVE_ROLLBACK_TURNS = 12
+AUTOSAVE_HISTORY_LIMIT = AUTOSAVE_ROLLBACK_TURNS + 1
+
 
 class GameState:
     def __init__(self, language="ru"):
@@ -39,7 +45,6 @@ class GameState:
         }
         
         self.reality_stability = 65
-        
         self.resources = {"matter": 150, "energy": 100}
         
         self.faith_zero_counter = 0
@@ -55,8 +60,10 @@ class GameState:
         
         self.save_slots = [None] * 6
         self.auto_save = None
+        self.auto_save_history = []
         
         self.card_effects = [
+            # Карточки 1–44 (базовые)
             {"left_effects": {"faith": -5}, "right_effects": {"matter": -25, "hab": 5}, "critical": False},
             {"left_effects": {"reality": 5, "energy": -10}, "right_effects": {"reality": -5, "order": 5, "faith": -5}, "critical": False},
             {"left_effects": {"faith": -8, "hab": -5}, "right_effects": {"energy": -20, "hab": 3}, "critical": False},
@@ -100,7 +107,44 @@ class GameState:
             {"left_effects": {"army": 8, "political": -8}, "right_effects": {"political": 6, "army": -6}, "critical": False},
             {"left_effects": {"matter": 35, "political": -7}, "right_effects": {"faith": 5, "energy": -20}, "critical": False},
             {"left_effects": {"political": -10, "order": -6}, "right_effects": {"matter": -35, "political": 7}, "critical": True},
-            {"left_effects": {"order": 8, "political": -8}, "right_effects": {"army": 6, "order": -5}, "critical": True}
+            {"left_effects": {"order": 8, "political": -8}, "right_effects": {"army": 6, "order": -5}, "critical": True},
+            # Карточки 45–80 (новые сюжетные карточки с нарастающей сложностью и кризисами)
+            {"left_effects": {"order": -8, "faith": -6}, "right_effects": {"energy": -30}, "critical": False},
+            {"left_effects": {"hab": -10, "faith": -8}, "right_effects": {"energy": -35, "matter": -20}, "critical": False},
+            {"left_effects": {"army": 10, "faith": -10}, "right_effects": {"political": -8, "matter": -25}, "critical": False},
+            {"left_effects": {"reality": 8, "matter": -30}, "right_effects": {"reality": -6}, "critical": False},
+            {"left_effects": {"army": -10, "order": 8}, "right_effects": {"matter": -40, "energy": -20}, "critical": True}, # Кризис
+            {"left_effects": {"faith": -10}, "right_effects": {"energy": -25, "reality": -5}, "critical": False},
+            {"left_effects": {"army": -8, "matter": -25}, "right_effects": {"energy": -30, "order": -5}, "critical": False},
+            {"left_effects": {"hab": -12}, "right_effects": {"matter": -40}, "critical": False},
+            {"left_effects": {"political": -15, "order": 15}, "right_effects": {"energy": -30, "matter": -30}, "critical": False},
+            {"left_effects": {"faith": -12, "order": 10}, "right_effects": {"energy": -25}, "critical": True}, # Кризис
+            {"left_effects": {"faith": -10, "hab": -10}, "right_effects": {"matter": -45}, "critical": False},
+            {"left_effects": {"order": 10, "faith": -12}, "right_effects": {"energy": -35}, "critical": False},
+            {"left_effects": {"hab": -15}, "right_effects": {"matter": -40, "energy": -25}, "critical": False},
+            {"left_effects": {"army": 12, "faith": -12}, "right_effects": {"army": -10, "faith": 8}, "critical": False},
+            {"left_effects": {"reality": -10}, "right_effects": {"energy": -50}, "critical": True}, # Кризис
+            {"left_effects": {"hab": -15}, "right_effects": {"energy": -45, "matter": -30}, "critical": False},
+            {"left_effects": {"order": 10, "faith": -10}, "right_effects": {"matter": -35}, "critical": False},
+            {"left_effects": {"energy": -40}, "right_effects": {"reality": -10}, "critical": False},
+            {"left_effects": {"faith": -15, "order": 10}, "right_effects": {}, "critical": False},
+            {"left_effects": {"hab": -10}, "right_effects": {"matter": -40}, "critical": True}, # Кризис
+            {"left_effects": {"reality": -8}, "right_effects": {"energy": -35}, "critical": False},
+            {"left_effects": {"political": -12, "army": 10}, "right_effects": {"political": 8}, "critical": False},
+            {"left_effects": {"hab": -12, "faith": -10}, "right_effects": {"energy": -50}, "critical": False},
+            {"left_effects": {"faith": -15, "order": 12}, "right_effects": {"matter": -30, "energy": -20}, "critical": False},
+            {"left_effects": {"faith": -20}, "right_effects": {"matter": -35, "energy": -25}, "critical": True}, # Кризис
+            {"left_effects": {"faith": -15}, "right_effects": {"matter": -50, "energy": -30}, "critical": False},
+            {"left_effects": {"political": -15, "order": 10}, "right_effects": {"matter": -40}, "critical": False},
+            {"left_effects": {"faith": -25, "order": 15, "army": 15}, "right_effects": {"matter": -50, "energy": -40}, "critical": True}, # Предфинальный кризис
+            {"left_effects": {"hab": -20}, "right_effects": {"energy": -50}, "critical": False},
+            {"left_effects": {"faith": -20}, "right_effects": {"matter": -45, "energy": -40}, "critical": False},
+            {"left_effects": {"political": -15, "army": 12}, "right_effects": {"political": 10}, "critical": False},
+            {"left_effects": {"reality": -15}, "right_effects": {"energy": -60}, "critical": True}, # Кризис
+            {"left_effects": {"hab": -20}, "right_effects": {"matter": -45, "energy": -40}, "critical": False},
+            {"left_effects": {"faith": -25}, "right_effects": {"matter": -50, "energy": -40}, "critical": False},
+            {"left_effects": {"faith": -30, "hab": -25}, "right_effects": {"matter": -70, "energy": -70}, "critical": True}, # 80-я карточка (Финал победы)
+            {"left_effects": {}, "right_effects": {}, "critical": False}, # Эпилог / послесловие
         ]
         
         self.revolution_effects = {
@@ -165,6 +209,21 @@ class GameState:
         
         self.current_card_index = 0
         self.set_language(language)
+        
+        self.background_arts = {
+            "art1": self.load_art("art1"),
+            "art2": self.load_art("art2"),
+            "art3": self.load_art("art3"),
+            "art4": self.load_art("art4"),
+            "art5": self.load_art("art5")
+        }
+        
+        self.current_art_key = self.determine_art_key_for_current_card()
+        self.background_art = self.background_arts[self.current_art_key] or self.background_arts["art1"]
+        self.bg_fade_alpha = 255
+        self.bg_transition_state = 'IDLE'
+        self.next_art_key = self.current_art_key
+        
         self.card_data = self.cards_pool[self.current_card_index]
         
         self.card_rect = pygame.Rect(SCREEN_WIDTH // 2 - 260, SCREEN_HEIGHT // 2 - 160, 520, 340)
@@ -175,19 +234,32 @@ class GameState:
         self.card_animation_active = False
         self.card_text_char_index = 0
         self.card_text_timer = 0
-        
-        # Кэш фонов для разных типов событий
-        self.background_arts = {
-            "art1": self.load_art("art1"),
-            "art2": self.load_art("art2"), # Бунты, социальные проблемы, эпидемии
-            "art3": self.load_art("art3"), # Военные, хунта, гарнизон
-            "art4": self.load_art("art4")  # Экономика, ресурсы, ремонт, дефицит
+        self.auto_save_history.append(self.create_save_snapshot())
+
+    def create_save_snapshot(self):
+        return {
+            "stats": {key: value["val"] for key, value in self.stats.items()},
+            "resources": self.resources.copy(),
+            "reality": self.reality_stability,
+            "card_idx": self.current_card_index,
+            "turns": self.turns_counter,
+            "faith_zero_counter": self.faith_zero_counter,
+            "hab_low_counter": self.hab_low_counter,
+            "revolution_active": self.revolution_active,
+            "final_revolution_active": self.final_revolution_active,
+            "military_coup_active": self.military_coup_active,
+            "chaos_crisis_active": self.chaos_crisis_active,
+            "political_paralysis_active": self.political_paralysis_active,
+            "reality_collapse_active": self.reality_collapse_active,
+            "revolution_timer": self.revolution_timer,
         }
-        self.background_art = self.get_background_art_for_current_card()
+
+    def reset_autosave_history(self):
+        self.auto_save_history = [self.create_save_snapshot()]
 
     def load_art(self, base_name):
-        for ext in [".png", ".jpg", ".jpeg"]:
-            filename = f"{base_name}{ext}"
+        for ext in [".png", ".jpg", ".jpeg", ".PNG", ".JPG"]:
+            filename = os.path.join(os.path.dirname(__file__), f"{base_name}{ext}")
             if os.path.exists(filename):
                 try:
                     img = pygame.image.load(filename).convert()
@@ -196,31 +268,69 @@ class GameState:
                     pass
         return None
 
-    def get_background_art_for_current_card(self):
+    def determine_event_tags(self, card, critical=False):
+        title_and_desc = f"{card.get('title', '')} {card.get('desc', '')}".casefold()
+        tags = []
+        if critical:
+            tags.append("critical")
+
+        tag_keywords = {
+            "military": (
+                "арм", "гарнизон", "военн", "министр", "совет", "офицер",
+                "командир", "патрул", "бойц", "депутат", "парламент", "суд",
+                "генерал", "контрабанд", "тенев", "пакт", "ультиматум",
+                "служба безопасности", "army", "garrison", "military", "minister",
+                "council", "officer", "commander", "patrol", "soldier", "deputy",
+                "parliament", "general", "smuggl", "shadow", "pact", "ultimatum",
+                "security service", "coup",
+            ),
+            "social": (
+                "бунт", "восстан", "толп", "демонстрац", "протест", "забастов",
+                "ропот", "народн", "рабоч", "митинг", "недовольств",
+                "riot", "uprising", "revolt", "crowd", "demonstrat", "protest",
+                "strike", "murmur", "people", "worker", "unrest", "looting",
+            ),
+            "anomaly": (
+                "аномал", "реальност", "пространств", "квантов", "искажен",
+                "разлом", "гравитац", "параллел", "исчезнов",
+                "anomaly", "reality", "spatial", "quantum", "distortion",
+                "rift", "gravity", "parallel", "disappear",
+            ),
+        }
+        for tag, keywords in tag_keywords.items():
+            if any(keyword in title_and_desc for keyword in keywords):
+                tags.append(tag)
+                break
+
+        if not tags:
+            tags.append("industrial")
+        return tags
+
+    def determine_art_key_for_current_card(self):
         card = self.get_active_card()
-        title = card.get("title", "").upper()
-        desc = card.get("desc", "").upper()
+        if self.revolution_active or self.chaos_crisis_active or self.reality_collapse_active or self.military_coup_active:
+            tags = ["critical"]
+        elif self.political_paralysis_active:
+            tags = ["military"]
+        else:
+            tags = card.get("tags", ["industrial"])
 
-        # 1. Военные события / хунта / армия -> art3
-        military_keywords = ["АРМИЯ", "ГАРНИЗОН", "ВОЕННЫЙ", "ПЕРЕВОРОТ", "ОФИЦЕР", "КОМАНДИР", "ПАТРУЛ", "БОЙЦОВ"]
-        if any(kw in title or kw in desc for kw in military_keywords) or self.military_coup_active:
-            if self.background_arts["art3"]:
-                return self.background_arts["art3"]
+        tag_to_art = {
+            "critical": "art4",
+            "military": "art3",
+            "social": "art2",
+            "anomaly": "art5",
+            "industrial": "art1",
+        }
+        for tag in tags:
+            art_key = tag_to_art.get(tag)
+            if art_key and self.background_arts.get(art_key):
+                return art_key
 
-        # 2. Бунты / народные волнения / социальные проблемы / мор -> art2
-        riot_keywords = ["БУНТ", "ВОССТАНИЕ", "МАССОВЫЙ МОР", "АПАТИИ", "ЗАКОВАН", "ЗАБАСТОВКА", "КУЛЬТ", "ФАНАТИЗМ", "БЕЖЕНЦЕВ"]
-        if any(kw in title or kw in desc for kw in riot_keywords) or self.revolution_active or self.chaos_crisis_active or self.political_paralysis_active:
-            if self.background_arts["art2"]:
-                return self.background_arts["art2"]
-
-        # 3. Экономика / ресурсы / ремонт / фильтры / энергия / материя -> art4
-        economy_keywords = ["ФИЛЬТР", "МАТЕРИИ", "ЭНЕРГИЯ", "РЕМОНТ", "СКЛАД", "ЛИФТ", "ВОДНЫХ", "ТУРБИН", "УТИЛИЗАЦИЯ", "РУДНИК", "ДЕФИЦИТ", "ОПРЕСНЕНИЯ"]
-        if any(kw in title or kw in desc for kw in economy_keywords):
-            if self.background_arts["art4"]:
-                return self.background_arts["art4"]
-
-        # По умолчанию (или для аномалий/реальности) возвращаем art1
-        return self.background_arts["art1"] or self.background_arts["art2"] or self.background_arts["art3"] or self.background_arts["art4"]
+        for fallback in ("art1", "art5", "art2", "art3", "art4"):
+            if self.background_arts.get(fallback):
+                return fallback
+        return "art1"
 
     def start_card_appearance(self):
         self.state = 'PLAYING'
@@ -237,8 +347,29 @@ class GameState:
         self.displayed_text = ""
         self.text_fast = False
         self.is_dragging = False
-        # Обновляем фон при появлении новой карточки
-        self.background_art = self.get_background_art_for_current_card()
+
+        new_art_key = self.determine_art_key_for_current_card()
+        if new_art_key != self.current_art_key:
+            self.next_art_key = new_art_key
+            self.bg_transition_state = 'FADING_OUT'
+        elif self.bg_transition_state == 'FADING_OUT':
+            self.bg_transition_state = 'FADING_IN'
+        else:
+            self.next_art_key = self.current_art_key
+
+    def update_background_transition(self):
+        if self.bg_transition_state == 'FADING_OUT':
+            self.bg_fade_alpha -= 15
+            if self.bg_fade_alpha <= 0:
+                self.bg_fade_alpha = 0
+                self.current_art_key = self.next_art_key
+                self.background_art = self.background_arts[self.current_art_key] or self.background_arts["art1"]
+                self.bg_transition_state = 'FADING_IN'
+        elif self.bg_transition_state == 'FADING_IN':
+            self.bg_fade_alpha += 15
+            if self.bg_fade_alpha >= 255:
+                self.bg_fade_alpha = 255
+                self.bg_transition_state = 'IDLE'
 
     def start_game_over(self):
         self.state = 'GAME_OVER'
@@ -247,8 +378,30 @@ class GameState:
         self.game_over_phase = 'FADE_IN'
         self.is_defeat = True
 
+    def start_victory_screen(self):
+        self.state = 'GAME_OVER'
+        self.game_over_alpha = 0
+        self.game_over_timer = 0
+        self.game_over_phase = 'FADE_IN'
+        self.is_defeat = False
+
     def restore_autosave(self):
-        data = self.auto_save
+        target_turn = max(1, self.turns_counter - AUTOSAVE_ROLLBACK_TURNS)
+        eligible_snapshots = [
+            snapshot
+            for snapshot in self.auto_save_history
+            if snapshot.get("turns", 1) <= target_turn
+        ]
+        if eligible_snapshots:
+            data = max(eligible_snapshots, key=lambda snapshot: snapshot.get("turns", 1))
+        elif self.auto_save_history:
+            data = min(
+                self.auto_save_history,
+                key=lambda snapshot: snapshot.get("turns", 1),
+            )
+        else:
+            data = self.auto_save
+
         if data is None:
             for stat in self.stats.values():
                 stat["val"] = 50
@@ -283,6 +436,15 @@ class GameState:
             self.revolution_timer = data.get("revolution_timer", 0)
 
         self.card_data = self.cards_pool[self.current_card_index]
+        previous_snapshots = [
+            snapshot
+            for snapshot in self.auto_save_history
+            if snapshot.get("turns", 1) < self.turns_counter
+        ]
+        self.auto_save = self.create_save_snapshot()
+        self.auto_save_history = (
+            previous_snapshots + [self.auto_save]
+        )[-AUTOSAVE_HISTORY_LIMIT:]
         self.is_defeat = False
         self.result_phase = None
         self.pending_effects = None
@@ -304,19 +466,36 @@ class GameState:
         localized = TEXT[language]
         if len(localized["cards"]) != len(self.card_effects):
             raise ValueError(f"Card translations ({len(localized['cards'])}) mismatch card effects ({len(self.card_effects)}) for language: {language}")
+        if len(TEXT["ru"]["cards"]) != len(self.card_effects):
+            raise ValueError("Canonical card tags do not match the card effects list.")
         self.cards_pool = [
-            {**card_text, **effects}
-            for card_text, effects in zip(localized["cards"], self.card_effects)
+            {
+                **card_text,
+                **effects,
+                "tags": self.determine_event_tags(
+                    TEXT["ru"]["cards"][index],
+                    effects.get("critical", False),
+                ),
+            }
+            for index, (card_text, effects) in enumerate(
+                zip(localized["cards"], self.card_effects)
+            )
         ]
         self.revolution_card = {**localized["revolution"], **self.revolution_effects}
+        self.revolution_card["tags"] = ["critical", "social"]
         self.final_revolution_card = {
             **localized["final_revolution"],
             **self.final_revolution_effects,
         }
+        self.final_revolution_card["tags"] = ["critical", "social"]
         self.military_coup_card = {**localized["military_coup"], **self.military_coup_card}
+        self.military_coup_card["tags"] = ["critical", "military"]
         self.chaos_crisis_card = {**localized["chaos_crisis"], **self.chaos_crisis_card}
+        self.chaos_crisis_card["tags"] = ["critical", "social"]
         self.political_paralysis_card = {**localized["political_paralysis"], **self.political_paralysis_card}
+        self.political_paralysis_card["tags"] = ["critical", "military"]
         self.reality_collapse_card = {**localized["reality_collapse"], **self.reality_collapse_card}
+        self.reality_collapse_card["tags"] = ["critical", "anomaly"]
         
         self.card_data = self.cards_pool[self.current_card_index]
 
@@ -327,6 +506,24 @@ class GameState:
         if (self.revolution_active and self.final_revolution_active) or self.military_coup_active or self.chaos_crisis_active or self.political_paralysis_active or self.reality_collapse_active:
             is_ending_choice = True
             self.is_defeat = True
+
+        # Проверка на победную 80-ю карточку (индекс 79 в массиве)
+        if self.current_card_index == 79 and not is_ending_choice:
+            is_ending_choice = True
+            self.is_defeat = False
+            if direction == "LEFT":
+                self.result_text_full = card["left_result"]
+            else:
+                self.result_text_full = card["right_result"]
+            self.pending_effects = {}
+            self.result_chunks = [(self.result_text_full, COLOR_TEXT)]
+            self.result_chunks.append(("\n\n[ ПОБЕДА: ВЫ УПРАВЛЯЛИ СЕКТОРОМ 80 ЦИКЛОВ. БУНКЕР СТЕРЕЛ УГРОЗУ ИНСУФФЛЯЦИИ ]", COLOR_ACCENT))
+            self.result_full_string = "".join([chunk[0] for chunk in self.result_chunks])
+            self.state = 'RESULT_WAIT'
+            self.result_timer = 0
+            self.result_phase = 'DOTS'
+            self.current_char_index = 0
+            return True
 
         if direction == "LEFT":
             self.displayed_text = ""
@@ -358,8 +555,11 @@ class GameState:
                 filtered_effects[key] = val
 
             if bankruptcy_penalty:
-                filtered_effects["order"] = filtered_effects.get("order", 0) - 15
-                filtered_effects["faith"] = filtered_effects.get("faith", 0) - 15
+                for stat in ("order", "faith"):
+                    existing_effect = filtered_effects.get(stat, 0)
+                    if existing_effect > 0:
+                        existing_effect = max(1, existing_effect // 2)
+                    filtered_effects[stat] = existing_effect - 15
                 self.result_text_full += "\n[АВАРИЯ ИЗ-ЗА ДЕФИЦИТА РЕСУРСОВ: Запасы полностью выгорели, сектор охвачен паникой!]"
         else:
             filtered_effects = {}
@@ -438,6 +638,10 @@ class GameState:
         if self.is_defeat:
             self.start_game_over()
             return
+
+        if self.current_card_index == 79 and not self.is_defeat:
+            self.start_victory_screen()
+            return
             
         self.turns_counter += 1
 
@@ -450,14 +654,13 @@ class GameState:
         base_energy_gain = 25
         base_matter_gain = 30
 
-        resource_penalty = 0.15 if order_val < 10 else 1.0
+        resource_penalty = 0.7 if order_val < 10 or faith_val < 10 else 1.0
         resource_bonus = 1.6 if order_val > 80 else 1.0
 
         total_multiplier = resource_penalty * resource_bonus
 
-        if self.turns_counter % 8 == 0:
+        if self.turns_counter % 6 == 0:
             self.resources["energy"] += int(base_energy_gain * total_multiplier)
-        if self.turns_counter % 10 == 0:
             self.resources["matter"] += int(base_matter_gain * total_multiplier)
 
         if self.turns_counter % 3 == 0:
@@ -507,7 +710,6 @@ class GameState:
 
             if army_val > 90:
                 coup_chance = 15 + (army_val - 90) * 3
-                import random
                 if random.randint(1, 100) <= coup_chance:
                     self.military_coup_active = True
 
@@ -531,34 +733,15 @@ class GameState:
                         self.faith_zero_counter = 0
 
                 if not self.revolution_active:
-                    if reality_val < 30:
-                        import random
-                        anomaly_indices = [1, 13, 18, 24, 31, 38]
-                        if random.randint(1, 100) <= 60:
-                            self.current_card_index = random.choice(anomaly_indices) % len(self.cards_pool)
-                        else:
-                            self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
-                    else:
-                        self.current_card_index = (self.current_card_index + 1) % len(self.cards_pool)
+                    # Плавное продвижение по линейке из 80 карточек
+                    self.current_card_index = min(len(self.cards_pool) - 1, self.current_card_index + 1)
 
         self.card_data = self.get_active_card()
 
+        snapshot = self.create_save_snapshot()
+        self.auto_save_history.append(snapshot)
+        self.auto_save_history = self.auto_save_history[-AUTOSAVE_HISTORY_LIMIT:]
         if self.turns_counter % 5 == 0:
-            self.auto_save = {
-                "stats": {k: v["val"] for k, v in self.stats.items()},
-                "resources": self.resources.copy(),
-                "reality": self.reality_stability,
-                "card_idx": self.current_card_index,
-                "turns": self.turns_counter,
-                "faith_zero_counter": self.faith_zero_counter,
-                "hab_low_counter": self.hab_low_counter,
-                "revolution_active": self.revolution_active,
-                "final_revolution_active": self.final_revolution_active,
-                "military_coup_active": self.military_coup_active,
-                "chaos_crisis_active": self.chaos_crisis_active,
-                "political_paralysis_active": self.political_paralysis_active,
-                "reality_collapse_active": self.reality_collapse_active,
-                "revolution_timer": self.revolution_timer,
-            }
+            self.auto_save = snapshot
             
         self.start_card_appearance()

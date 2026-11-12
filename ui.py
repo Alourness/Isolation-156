@@ -3,6 +3,10 @@ import pygame
 from config import *
 from localization import get_text
 
+_gradient_cache = None
+_gradient_cache_bucket = None
+
+
 def render_wrapped_text(surface, text, font, color, position, max_width, line_height, alpha=255):
     x, y = position
     for paragraph in text.split("\n"):
@@ -159,9 +163,22 @@ def render_anomaly_radial(screen, stability_val, language):
     screen.blit(anom_surf, (panel_x, panel_y))
 
 def render_gradient_background(screen, tick):
-    for y in range(SCREEN_HEIGHT):
-        factor = (math.sin(tick * 0.02 + y * 0.005) + 1) / 2
-        r = int(6 + factor * 8)
-        g = int(14 + factor * 16)
-        b = int(10 + factor * 10)
-        pygame.draw.line(screen, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+    global _gradient_cache, _gradient_cache_bucket
+
+    update_bucket = tick // 5
+    if _gradient_cache is None or update_bucket != _gradient_cache_bucket:
+        if _gradient_cache is None:
+            _gradient_cache = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+        phase = update_bucket * 5 * 0.02
+        for y in range(SCREEN_HEIGHT):
+            factor = (math.sin(phase + y * 0.005) + 1) / 2
+            color = (
+                int(6 + factor * 8),
+                int(14 + factor * 16),
+                int(10 + factor * 10),
+            )
+            pygame.draw.line(_gradient_cache, color, (0, y), (SCREEN_WIDTH, y))
+        _gradient_cache_bucket = update_bucket
+
+    screen.blit(_gradient_cache, (0, 0))

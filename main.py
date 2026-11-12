@@ -8,7 +8,6 @@ from ui import (
     render_anomaly_radial,
     render_gradient_background,
     render_wrapped_text,
-    render_unaffordable_glow,
 )
 from localization import LANGUAGES, get_text, load_language, save_language
 
@@ -48,7 +47,11 @@ class Game:
         self.gs.text_fast = False
 
     def get_active_card(self):
-        return self.gs.get_active_card()
+        if self.gs.revolution_active and self.gs.final_revolution_active:
+            return self.gs.final_revolution_card
+        if self.gs.revolution_active:
+            return self.gs.revolution_card
+        return self.gs.card_data
 
     def save_game_state(self):
         return {
@@ -75,6 +78,7 @@ class Game:
         self.gs.final_revolution_active = data.get("final_revolution_active", False)
         self.gs.revolution_timer = data.get("revolution_timer", 0)
         self.gs.card_data = self.get_active_card()
+        self.gs.reset_autosave_history()
         self.gs.start_card_appearance()
 
     def run(self):
@@ -129,26 +133,15 @@ class Game:
                 if self.gs.state == 'PLAYING' and self.gs.is_dragging:
                     self.gs.is_dragging = False
                     if self.gs.card_current_x < self.gs.card_rect.x - 120:
-                        if self.gs.can_afford_choice("LEFT"):
-                            self.gs.trigger_choice("LEFT")
-                        else:
-                            self.gs.card_current_x = self.gs.card_rect.x
+                        self.gs.trigger_choice("LEFT")
                     elif self.gs.card_current_x > self.gs.card_rect.x + 120:
-                        if self.gs.can_afford_choice("RIGHT"):
-                            self.gs.trigger_choice("RIGHT")
-                        else:
-                            self.gs.card_current_x = self.gs.card_rect.x
+                        self.gs.trigger_choice("RIGHT")
                     else:
                         self.gs.card_current_x = self.gs.card_rect.x
 
             elif event.type == pygame.MOUSEMOTION:
                 if self.gs.state == 'PLAYING' and self.gs.is_dragging:
-                    target_x = event.pos[0] - self.gs.card_drag_offset_x
-                    if not self.gs.can_afford_choice("LEFT"):
-                        target_x = max(target_x, self.gs.card_rect.x - 120)
-                    if not self.gs.can_afford_choice("RIGHT"):
-                        target_x = min(target_x, self.gs.card_rect.x + 120)
-                    self.gs.card_current_x = target_x
+                    self.gs.card_current_x = event.pos[0] - self.gs.card_drag_offset_x
 
             elif event.type == pygame.KEYDOWN:
                 if event.key != pygame.K_SPACE:
@@ -212,6 +205,9 @@ class Game:
                         self.gs.text_fast = True
 
     def update(self, delta_ms=1000 / FPS):
+        if self.gs.bg_transition_state != 'IDLE':
+            self.gs.update_background_transition()
+
         if self.gs.state == 'MENU':
             if self.gs.menu_alpha > 0:
                 self.gs.menu_alpha = max(0, self.gs.menu_alpha - 5)
@@ -226,7 +222,8 @@ class Game:
         elif self.gs.game_over_phase == 'HOLD':
             self.gs.game_over_timer += delta_ms
             if self.gs.game_over_timer >= 3000:
-                self.gs.restore_autosave()
+                if getattr(self.gs, 'is_defeat', True):
+                    self.gs.restore_autosave()
         elif self.gs.game_over_phase == 'FADE_OUT':
             self.gs.game_over_alpha = max(
                 0, self.gs.game_over_alpha - 255 * delta_ms / 1200
@@ -313,12 +310,15 @@ class Game:
                     self.gs.text_fast = False
 
     def render(self):
+        show_background_art = (
+            self.gs.background_art is not None
+            and self.gs.state not in ('MENU', 'LOAD_MENU')
+        )
         render_gradient_background(self.screen, self.tick_counter)
         
-        if self.gs.background_art and self.gs.state not in ('MENU', 'LOAD_MENU'):
-            art_surf = self.gs.background_art.copy()
-            art_surf.set_alpha(100)
-            self.screen.blit(art_surf, (0, 0))
+        if show_background_art:
+            self.gs.background_art.set_alpha(round(100 * self.gs.bg_fade_alpha / 255))
+            self.screen.blit(self.gs.background_art, (0, 0))
 
         if self.gs.state == 'MENU':
             title_surf = FONT_TITLE.render("ISOLATION-156", True, COLOR_TEXT)
@@ -441,10 +441,6 @@ class Game:
             self.screen.blit(prompt_surf, (SCREEN_WIDTH // 2 - prompt_surf.get_width() // 2, SCREEN_HEIGHT - 45))
             
         elif self.gs.state == 'PLAYING':
-            for direction in ("LEFT", "RIGHT"):
-                if not self.gs.can_afford_choice(direction):
-                    render_unaffordable_glow(self.screen, direction)
-
             card_draw_rect = pygame.Rect(self.gs.card_current_x, self.gs.card_rect.y, self.gs.card_rect.width, self.gs.card_rect.height)
             if self.gs.card_animation_active:
                 card_draw_rect.y = self.gs.card_anim_y
@@ -514,7 +510,9 @@ class Game:
             self.screen.blit(fade_overlay, (0, 0))
             
             if self.gs.game_over_phase == 'HOLD':
-                defeat_surf = FONT_TITLE.render(get_text(self.gs.language, "game_over"), True, COLOR_DANGER)
+                text_to_show = "ПОБЕДА" if not getattr(self.gs, 'is_defeat', True) else get_text(self.gs.language, "game_over")
+                color_to_show = COLOR_ACCENT if not getattr(self.gs, 'is_defeat', True) else COLOR_DANGER
+                defeat_surf = FONT_TITLE.render(text_to_show, True, color_to_show)
                 defeat_rect = defeat_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
                 self.screen.blit(defeat_surf, defeat_rect)
 
